@@ -28,6 +28,65 @@ def validate_youtube_url(url):
             return match.group(1)
     return None
 
+def highlight_search_terms(text, search_query):
+    """Highlight search terms in text with HTML styling"""
+    if not search_query or not text:
+        return text
+    
+    # Split search query into individual terms
+    search_terms = [term.strip() for term in search_query.split() if term.strip()]
+    
+    highlighted_text = text
+    
+    # Create different colors for different search terms
+    colors = ['#ffeb3b', '#ff9800', '#4caf50', '#2196f3', '#9c27b0', '#f44336']
+    
+    for i, term in enumerate(search_terms):
+        if term:
+            color = colors[i % len(colors)]
+            # Use HTML highlighting with background color
+            pattern = re.compile(re.escape(term), re.IGNORECASE)
+            highlighted_text = pattern.sub(
+                f'<span style="background-color: {color}; padding: 2px 4px; border-radius: 3px; font-weight: bold; color: #000;">{term}</span>',
+                highlighted_text
+            )
+    
+    return highlighted_text
+
+def extract_context_snippets(text, search_query, context_length=150):
+    """Extract context snippets around search terms"""
+    if not search_query or not text:
+        return []
+    
+    search_terms = [term.strip().lower() for term in search_query.split() if term.strip()]
+    snippets = []
+    
+    for term in search_terms:
+        # Find all occurrences of the term
+        pattern = re.compile(re.escape(term), re.IGNORECASE)
+        matches = list(pattern.finditer(text))
+        
+        for match in matches:
+            start_pos = max(0, match.start() - context_length)
+            end_pos = min(len(text), match.end() + context_length)
+            
+            # Extract context around the match
+            context = text[start_pos:end_pos]
+            
+            # Clean up the snippet
+            if start_pos > 0:
+                context = "..." + context
+            if end_pos < len(text):
+                context = context + "..."
+            
+            # Highlight the search term in the snippet
+            highlighted_context = highlight_search_terms(context, term)
+            
+            if highlighted_context not in snippets:
+                snippets.append(highlighted_context)
+    
+    return snippets[:5]  # Return top 5 unique snippets
+
 def main():
     st.title("Coffee with Scott Adams - Transcript Extractor & Enhancer")
     st.markdown("---")
@@ -149,7 +208,8 @@ def main():
         st.subheader(f"Total Episodes: {len(df)}")
         
         # Display episodes
-        for idx, episode in df.iterrows():
+        for idx, row in df.iterrows():
+            episode = row.to_dict()
             with st.expander(f"{episode['title']} - {episode['date']}"):
                 col1, col2 = st.columns([3, 1])
                 
@@ -192,20 +252,72 @@ def main():
                 
                 for result in search_results:
                     with st.expander(f"{result['title']} - {result['date']}"):
-                        st.write(f"**Date:** {result['date']}")
-                        st.link_button("Watch on YouTube", result['url'])
+                        col1, col2 = st.columns([3, 1])
                         
-                        # Highlight search terms in transcript
-                        highlighted_transcript = result['enhanced_transcript']
+                        with col1:
+                            st.write(f"**Date:** {result['date']}")
+                            st.write(f"**Video ID:** {result['video_id']}")
+                            
+                        with col2:
+                            st.link_button("Watch on YouTube", result['url'])
                         
-                        # Simple highlighting by replacing search terms with markdown bold
-                        search_terms = search_query.lower().split()
+                        # Advanced highlighting with HTML styling
+                        highlighted_transcript = highlight_search_terms(
+                            result['enhanced_transcript'], 
+                            search_query
+                        )
+                        
+                        # Count occurrences
+                        search_terms = [term.strip() for term in search_query.lower().split() if term.strip()]
+                        total_matches = 0
                         for term in search_terms:
-                            pattern = re.compile(re.escape(term), re.IGNORECASE)
-                            highlighted_transcript = pattern.sub(f"**{term.upper()}**", highlighted_transcript)
+                            total_matches += len(re.findall(re.escape(term), result['enhanced_transcript'], re.IGNORECASE))
                         
-                        st.markdown("**Transcript (with search terms highlighted):**")
-                        st.markdown(highlighted_transcript)
+                        st.markdown(f"**Found {total_matches} match(es) in transcript:**")
+                        
+                        # Display highlighted transcript with HTML
+                        st.markdown(
+                            f"""
+                            <div style="
+                                background-color: #f8f9fa;
+                                padding: 15px;
+                                border-radius: 5px;
+                                border-left: 4px solid #007acc;
+                                max-height: 400px;
+                                overflow-y: auto;
+                                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                                line-height: 1.6;
+                            ">
+                                {highlighted_transcript}
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+                        
+                        # Show context snippets for better readability
+                        st.markdown("**Key passages containing search terms:**")
+                        context_snippets = extract_context_snippets(
+                            result['enhanced_transcript'], 
+                            search_query, 
+                            context_length=150
+                        )
+                        
+                        for i, snippet in enumerate(context_snippets[:3], 1):  # Show top 3 snippets
+                            st.markdown(
+                                f"""
+                                <div style="
+                                    background-color: #fff3cd;
+                                    padding: 10px;
+                                    margin: 5px 0;
+                                    border-radius: 3px;
+                                    border-left: 3px solid #ffc107;
+                                ">
+                                    <small><strong>Snippet {i}:</strong></small><br>
+                                    {snippet}
+                                </div>
+                                """,
+                                unsafe_allow_html=True
+                            )
             else:
                 st.info("No results found for your search query.")
     
