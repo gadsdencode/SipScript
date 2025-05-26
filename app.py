@@ -29,7 +29,7 @@ def validate_youtube_url(url):
     return None
 
 def highlight_search_terms(text, search_query):
-    """Highlight search terms in text with HTML styling"""
+    """Highlight search terms in text with HTML styling while preserving all text"""
     if not search_query or not text:
         return text
     
@@ -44,10 +44,10 @@ def highlight_search_terms(text, search_query):
     for i, term in enumerate(search_terms):
         if term:
             color = colors[i % len(colors)]
-            # Use HTML highlighting with background color
-            pattern = re.compile(re.escape(term), re.IGNORECASE)
+            # Use HTML highlighting with background color - preserve the original case
+            pattern = re.compile(f'({re.escape(term)})', re.IGNORECASE)
             highlighted_text = pattern.sub(
-                f'<span style="background-color: {color}; padding: 2px 4px; border-radius: 3px; font-weight: bold; color: #000;">{term}</span>',
+                lambda m: f'<span style="background-color: {color}; padding: 2px 4px; border-radius: 3px; font-weight: bold; color: #000;">{m.group(1)}</span>',
                 highlighted_text
             )
     
