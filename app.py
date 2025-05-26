@@ -261,12 +261,6 @@ def main():
                         with col2:
                             st.link_button("Watch on YouTube", result['url'])
                         
-                        # Advanced highlighting with HTML styling
-                        highlighted_transcript = highlight_search_terms(
-                            result['enhanced_transcript'], 
-                            search_query
-                        )
-                        
                         # Count occurrences
                         search_terms = [term.strip() for term in search_query.lower().split() if term.strip()]
                         total_matches = 0
@@ -275,7 +269,20 @@ def main():
                         
                         st.markdown(f"**Found {total_matches} match(es) in transcript:**")
                         
-                        # Display highlighted transcript with HTML
+                        # Create highlighted version of the transcript
+                        transcript_text = result['enhanced_transcript']
+                        
+                        # Apply highlighting to the full transcript
+                        for term in search_terms:
+                            if term:
+                                # Find and replace all instances with highlighted version
+                                pattern = re.compile(f'({re.escape(term)})', re.IGNORECASE)
+                                transcript_text = pattern.sub(
+                                    r'<mark style="background-color: #ffeb3b; padding: 1px 3px; border-radius: 2px; font-weight: bold;">\1</mark>',
+                                    transcript_text
+                                )
+                        
+                        # Display the full transcript with highlighting
                         st.markdown(
                             f"""
                             <div style="
@@ -287,8 +294,9 @@ def main():
                                 overflow-y: auto;
                                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                                 line-height: 1.6;
+                                white-space: pre-wrap;
                             ">
-                                {highlighted_transcript}
+                                {transcript_text}
                             </div>
                             """,
                             unsafe_allow_html=True
