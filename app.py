@@ -96,7 +96,7 @@ def main():
     
     # Sidebar for navigation
     st.sidebar.title("Navigation")
-    page = st.sidebar.selectbox("Choose a page", ["Add Episode", "Browse Episodes", "Search Transcripts"])
+    page = st.sidebar.selectbox("Choose a page", ["Add Episode", "Browse Episodes", "Search Transcripts", "Database Management"])
     
     if page == "Add Episode":
         st.header("Add New Episode")
@@ -320,6 +320,109 @@ def main():
                             )
             else:
                 st.info("No results found for your search query.")
+    
+    elif page == "Database Management":
+        st.header("Database Management")
+        
+        # Database Statistics
+        total_episodes = db.get_episode_count()
+        all_episodes = db.get_all_episodes()
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("Total Episodes", total_episodes)
+        
+        with col2:
+            if all_episodes:
+                total_words = sum(len(episode['enhanced_transcript'].split()) for episode in all_episodes)
+                st.metric("Total Words", f"{total_words:,}")
+            else:
+                st.metric("Total Words", "0")
+        
+        with col3:
+            if all_episodes:
+                latest_date = max(episode['date'] for episode in all_episodes)
+                st.metric("Latest Episode", latest_date)
+            else:
+                st.metric("Latest Episode", "None")
+        
+        st.markdown("---")
+        
+        # Database Operations
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("Episode Management")
+            
+            if all_episodes:
+                # Show episodes in a table format
+                df = pd.DataFrame(all_episodes)
+                df_display = df[['id', 'title', 'date', 'video_id']].copy()
+                df_display.columns = ['ID', 'Title', 'Date', 'Video ID']
+                
+                st.dataframe(df_display, use_container_width=True)
+                
+                # Delete episode functionality
+                st.markdown("**Delete Episode:**")
+                episode_to_delete = st.selectbox(
+                    "Select episode to delete:",
+                    options=[f"{ep['id']} - {ep['title'][:50]}..." for ep in all_episodes],
+                    key="delete_episode"
+                )
+                
+                if st.button("Delete Selected Episode", type="secondary"):
+                    if episode_to_delete:
+                        episode_id = int(episode_to_delete.split(" - ")[0])
+                        if db.delete_episode(episode_id):
+                            st.success("Episode deleted successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Failed to delete episode.")
+            else:
+                st.info("No episodes in database yet.")
+        
+        with col2:
+            st.subheader("Database Info")
+            
+            # Show database file info
+            import os
+            db_path = db.db_path
+            if os.path.exists(db_path):
+                file_size = os.path.getsize(db_path)
+                st.write(f"**Database file:** {db_path}")
+                st.write(f"**File size:** {file_size / 1024:.2f} KB")
+                st.write(f"**Total episodes:** {total_episodes}")
+            
+            # Export functionality
+            st.markdown("**Export Data:**")
+            
+            if st.button("Export to CSV"):
+                if all_episodes:
+                    df = pd.DataFrame(all_episodes)
+                    csv = df.to_csv(index=False)
+                    st.download_button(
+                        label="Download CSV",
+                        data=csv,
+                        file_name=f"podcast_transcripts_{datetime.now().strftime('%Y%m%d')}.csv",
+                        mime="text/csv"
+                    )
+                else:
+                    st.warning("No data to export.")
+            
+            # Database maintenance
+            st.markdown("**Database Maintenance:**")
+            
+            if st.button("Optimize Database"):
+                try:
+                    # Run VACUUM to optimize the database
+                    import sqlite3
+                    with sqlite3.connect(db.db_path) as conn:
+                        conn.execute("VACUUM")
+                        conn.commit()
+                    st.success("Database optimized successfully!")
+                except Exception as e:
+                    st.error(f"Failed to optimize database: {str(e)}")
     
     # Footer
     st.markdown("---")
