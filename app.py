@@ -323,6 +323,7 @@ def main():
                                     margin: 5px 0;
                                     border-radius: 3px;
                                     border-left: 3px solid #ffc107;
+                                    color: black;
                                 ">
                                     <small><strong>Snippet {i}:</strong></small><br>
                                     {snippet}
