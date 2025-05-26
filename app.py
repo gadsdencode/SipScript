@@ -298,6 +298,7 @@ def main():
                                 line-height: 1.5;
                                 white-space: pre-wrap;
                                 word-wrap: break-word;
+                                color: black;
                             ">
                                 {highlighted_transcript}
                             </div>
