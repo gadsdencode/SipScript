@@ -261,43 +261,49 @@ def main():
                         with col2:
                             st.link_button("Watch on YouTube", result['url'])
                         
-                        # DEBUG: Let's see what we're actually working with
-                        st.write("**DEBUG INFO:**")
-                        st.write(f"Search query: '{search_query}'")
-                        st.write(f"Transcript length: {len(result['enhanced_transcript'])}")
-                        st.write(f"First 200 chars of transcript: {result['enhanced_transcript'][:200]}...")
-                        
                         # Count occurrences
                         search_terms = [term.strip() for term in search_query.lower().split() if term.strip()]
                         total_matches = 0
                         for term in search_terms:
                             matches = len(re.findall(re.escape(term), result['enhanced_transcript'], re.IGNORECASE))
                             total_matches += matches
-                            st.write(f"Term '{term}' found {matches} times")
                         
                         st.markdown(f"**Found {total_matches} match(es) in transcript:**")
                         
-                        # SIMPLE approach - just use st.text_area with the full transcript
-                        # and manually highlight using simple string replacement
-                        original_transcript = result['enhanced_transcript']
+                        # Get the full transcript
+                        full_transcript = result['enhanced_transcript']
                         
-                        # Show original transcript first (for comparison)
-                        st.markdown("**Original transcript (first 500 chars):**")
-                        st.text(original_transcript[:500] + "...")
-                        
-                        # Now try simple highlighting
-                        highlighted_transcript = original_transcript
+                        # Apply highlighting using HTML spans
+                        highlighted_transcript = full_transcript
                         for term in search_terms:
                             if term:
-                                # Simple case-insensitive replacement
-                                pattern = re.compile(re.escape(term), re.IGNORECASE)
+                                # Replace all instances with highlighted version
+                                pattern = re.compile(f'({re.escape(term)})', re.IGNORECASE)
                                 highlighted_transcript = pattern.sub(
-                                    lambda m: f'**{m.group(0).upper()}**',
+                                    r'<span style="background-color: yellow; font-weight: bold; padding: 2px;">\1</span>',
                                     highlighted_transcript
                                 )
                         
-                        st.markdown("**Highlighted transcript (with markdown):**")
-                        st.markdown(highlighted_transcript[:1000] + "...")  # Show first 1000 chars
+                        # Display the FULL transcript with highlighting in a scrollable container
+                        st.markdown(
+                            f"""
+                            <div style="
+                                background-color: #f8f9fa;
+                                padding: 15px;
+                                border-radius: 5px;
+                                border-left: 4px solid #007acc;
+                                max-height: 500px;
+                                overflow-y: auto;
+                                font-family: Arial, sans-serif;
+                                line-height: 1.5;
+                                white-space: pre-wrap;
+                                word-wrap: break-word;
+                            ">
+                                {highlighted_transcript}
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
                         
                         # Show context snippets for better readability
                         st.markdown("**Key passages containing search terms:**")
