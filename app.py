@@ -319,7 +319,7 @@ def main():
                             # Look for a column that might contain URLs
                             url_column = None
                             for col in df.columns:
-                                if any(('url' in col.lower()) or ('link' in col.lower())):
+                                if ('url' in col.lower()) or ('link' in col.lower()):
                                     url_column = col
                                     break
                             
