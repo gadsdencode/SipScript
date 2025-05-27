@@ -223,7 +223,8 @@ def main():
                         'date': transcript_data['date'],
                         'url': youtube_url,
                         'raw_transcript': transcript_data['transcript'],
-                        'enhanced_transcript': enhanced_transcript
+                        'enhanced_transcript': enhanced_transcript,
+                        'extraction_method': transcript_data.get('extraction_method', 'caption')
                     }
                     
                     db.save_episode(episode_data)

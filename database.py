@@ -76,10 +76,12 @@ class DatabaseManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
+            extraction_method = episode_data.get('extraction_method', 'caption')
+            
             cursor.execute("""
                 INSERT OR REPLACE INTO episodes 
-                (video_id, title, date, url, raw_transcript, enhanced_transcript, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (video_id, title, date, url, raw_transcript, enhanced_transcript, extraction_method, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 episode_data['video_id'],
                 episode_data['title'],
@@ -87,6 +89,7 @@ class DatabaseManager:
                 episode_data['url'],
                 episode_data['raw_transcript'],
                 episode_data['enhanced_transcript'],
+                extraction_method,
                 datetime.now().isoformat()
             ))
             
