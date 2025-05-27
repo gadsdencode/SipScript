@@ -25,6 +25,9 @@ class DatabaseManager:
                     raw_transcript TEXT NOT NULL,
                     enhanced_transcript TEXT NOT NULL,
                     extraction_method TEXT DEFAULT 'caption',
+                    topics TEXT,
+                    key_points TEXT,
+                    summary TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
@@ -33,6 +36,27 @@ class DatabaseManager:
             # Add extraction_method column if it doesn't exist (for existing databases)
             try:
                 cursor.execute("ALTER TABLE episodes ADD COLUMN extraction_method TEXT DEFAULT 'caption'")
+            except sqlite3.OperationalError:
+                # Column already exists
+                pass
+                
+            # Add topics column if it doesn't exist
+            try:
+                cursor.execute("ALTER TABLE episodes ADD COLUMN topics TEXT")
+            except sqlite3.OperationalError:
+                # Column already exists
+                pass
+                
+            # Add key_points column if it doesn't exist
+            try:
+                cursor.execute("ALTER TABLE episodes ADD COLUMN key_points TEXT")
+            except sqlite3.OperationalError:
+                # Column already exists
+                pass
+                
+            # Add summary column if it doesn't exist
+            try:
+                cursor.execute("ALTER TABLE episodes ADD COLUMN summary TEXT")
             except sqlite3.OperationalError:
                 # Column already exists
                 pass
@@ -49,7 +73,7 @@ class DatabaseManager:
             # Create full-text search index for transcripts
             cursor.execute("""
                 CREATE VIRTUAL TABLE IF NOT EXISTS episodes_fts USING fts5(
-                    title, enhanced_transcript, 
+                    title, enhanced_transcript, topics, summary,
                     content='episodes',
                     content_rowid='id'
                 )
@@ -58,8 +82,8 @@ class DatabaseManager:
             # Create triggers to keep FTS table in sync
             cursor.execute("""
                 CREATE TRIGGER IF NOT EXISTS episodes_fts_insert AFTER INSERT ON episodes BEGIN
-                    INSERT INTO episodes_fts(rowid, title, enhanced_transcript) 
-                    VALUES (new.id, new.title, new.enhanced_transcript);
+                    INSERT INTO episodes_fts(rowid, title, enhanced_transcript, topics, summary) 
+                    VALUES (new.id, new.title, new.enhanced_transcript, new.topics, new.summary);
                 END
             """)
             
@@ -71,7 +95,8 @@ class DatabaseManager:
             
             cursor.execute("""
                 CREATE TRIGGER IF NOT EXISTS episodes_fts_update AFTER UPDATE ON episodes BEGIN
-                    UPDATE episodes_fts SET title = new.title, enhanced_transcript = new.enhanced_transcript 
+                    UPDATE episodes_fts SET title = new.title, enhanced_transcript = new.enhanced_transcript, 
+                    topics = new.topics, summary = new.summary
                     WHERE rowid = new.id;
                 END
             """)
@@ -84,11 +109,15 @@ class DatabaseManager:
             cursor = conn.cursor()
             
             extraction_method = episode_data.get('extraction_method', 'caption')
+            topics = episode_data.get('topics', None)
+            key_points = episode_data.get('key_points', None)
+            summary = episode_data.get('summary', None)
             
             cursor.execute("""
                 INSERT OR REPLACE INTO episodes 
-                (video_id, title, date, url, raw_transcript, enhanced_transcript, extraction_method, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (video_id, title, date, url, raw_transcript, enhanced_transcript, extraction_method, 
+                topics, key_points, summary, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 episode_data['video_id'],
                 episode_data['title'],
@@ -97,6 +126,9 @@ class DatabaseManager:
                 episode_data['raw_transcript'],
                 episode_data['enhanced_transcript'],
                 extraction_method,
+                topics,
+                key_points,
+                summary,
                 datetime.now().isoformat()
             ))
             

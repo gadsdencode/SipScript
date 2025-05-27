@@ -1,13 +1,17 @@
 import os
 import re
-from typing import Optional
+from typing import Optional, Dict, Union, List
 from openai import OpenAI
 
 class TranscriptProcessor:
-    def __init__(self):
+    def __init__(self, api_key=None):
         """Initialize transcript processor with OpenAI client"""
-        api_key = os.getenv("OPENAI_API_KEY", "your-openai-api-key-here")
-        self.client = OpenAI(api_key=api_key)
+        # Use provided API key or fall back to environment variable
+        if api_key:
+            self.client = OpenAI(api_key=api_key)
+        else:
+            api_key = os.getenv("OPENAI_API_KEY", "your-openai-api-key-here")
+            self.client = OpenAI(api_key=api_key)
     
     def enhance_transcript(self, raw_transcript: str) -> str:
         """
@@ -118,10 +122,14 @@ Transcript to clean:"""
         except Exception as e:
             raise Exception(f"OpenAI API error: {str(e)}")
     
-    def extract_key_topics(self, transcript: str) -> list:
+    def extract_key_topics(self, transcript: str) -> Dict:
         """Extract key topics and themes from the transcript"""
         if not transcript or len(transcript.strip()) < 100:
-            return []
+            return {
+                "topics": [],
+                "key_points": [],
+                "summary": "Transcript too short to summarize"
+            }
         
         prompt = """Analyze the following podcast transcript and extract the main topics, themes, and key points discussed. 
         
@@ -154,8 +162,25 @@ Focus on substantial topics and avoid minor tangents."""
             )
             
             import json
-            result = json.loads(response.choices[0].message.content)
-            return result
+            try:
+                result = json.loads(response.choices[0].message.content)
+                # Validate the result has the expected structure
+                if not isinstance(result, dict):
+                    raise ValueError("Result is not a dictionary")
+                
+                # Ensure all expected keys exist
+                result.setdefault("topics", [])
+                result.setdefault("key_points", [])
+                result.setdefault("summary", "No summary generated")
+                
+                return result
+            except json.JSONDecodeError as e:
+                print(f"Warning: Failed to parse JSON response: {str(e)}")
+                return {
+                    "topics": [],
+                    "key_points": [],
+                    "summary": "Failed to parse topic extraction results"
+                }
             
         except Exception as e:
             print(f"Warning: Failed to extract topics: {str(e)}")
