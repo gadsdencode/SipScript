@@ -105,37 +105,63 @@ class CaptionScraper:
     def _extract_caption_data(self, html: str) -> Optional[str]:
         """Extract caption/subtitle data from HTML"""
         try:
-            # Look for caption tracks in the page data
-            caption_patterns = [
-                r'"captionTracks"\s*:\s*\[([^\]]+)\]',
-                r'"captions"\s*:\s*{[^}]*"playerCaptionsTracklistRenderer"[^}]*}',
-                r'"automaticCaptions"\s*:\s*{([^}]+)}'
+            # Look for the player config that contains caption track URLs
+            player_config_pattern = r'ytInitialPlayerResponse\s*=\s*({.+?});'
+            match = re.search(player_config_pattern, html)
+            
+            if match:
+                try:
+                    config_json = match.group(1)
+                    import json
+                    player_data = json.loads(config_json)
+                    
+                    # Navigate to captions data
+                    captions = player_data.get('captions', {})
+                    caption_tracks = captions.get('playerCaptionsTracklistRenderer', {}).get('captionTracks', [])
+                    
+                    # Find English captions (prefer manual over auto-generated)
+                    english_track = None
+                    for track in caption_tracks:
+                        if track.get('languageCode', '').startswith('en'):
+                            if track.get('kind') != 'asr':  # Manual captions
+                                english_track = track
+                                break
+                            elif english_track is None:  # Auto-generated as fallback
+                                english_track = track
+                    
+                    if english_track and 'baseUrl' in english_track:
+                        caption_url = english_track['baseUrl']
+                        caption_text = self._download_caption_file(caption_url)
+                        if caption_text and len(caption_text.strip()) > 100:
+                            return caption_text
+                
+                except json.JSONDecodeError:
+                    print("Failed to parse player config JSON")
+            
+            # Fallback: Look for caption tracks in a simpler pattern
+            caption_url_pattern = r'"baseUrl":"([^"]*transcript[^"]*)"'
+            url_matches = re.findall(caption_url_pattern, html)
+            
+            for url in url_matches:
+                if 'lang=en' in url or '&tlang=en' in url:
+                    clean_url = url.replace('\\u0026', '&').replace('\\/', '/').replace('\\/','/')
+                    caption_text = self._download_caption_file(clean_url)
+                    if caption_text and len(caption_text.strip()) > 100:
+                        return caption_text
+            
+            # Another fallback: look for any transcript-like URLs
+            transcript_patterns = [
+                r'"baseUrl":"([^"]*timedtext[^"]*lang=en[^"]*)"',
+                r'"baseUrl":"([^"]*caption[^"]*)"'
             ]
             
-            for pattern in caption_patterns:
-                match = re.search(pattern, html, re.DOTALL)
-                if match:
-                    caption_data = match.group(0)
-                    # Look for English caption URLs
-                    url_matches = re.findall(r'"baseUrl"\s*:\s*"([^"]+)"', caption_data)
-                    
-                    for url in url_matches:
-                        if 'lang=en' in url or '&lang=en' in url:
-                            # Clean up the URL
-                            clean_url = url.replace('\\u0026', '&').replace('\\/', '/')
-                            caption_text = self._download_caption_file(clean_url)
-                            if caption_text:
-                                return caption_text
-            
-            # Fallback: look for embedded subtitle data
-            subtitle_pattern = r'"text"\s*:\s*"([^"]+)"'
-            subtitle_matches = re.findall(subtitle_pattern, html)
-            
-            if subtitle_matches:
-                # Combine all subtitle text
-                combined_text = ' '.join([self._clean_text(text) for text in subtitle_matches])
-                if len(combined_text) > 100:  # Only return if substantial content
-                    return combined_text
+            for pattern in transcript_patterns:
+                url_matches = re.findall(pattern, html)
+                for url in url_matches:
+                    clean_url = url.replace('\\u0026', '&').replace('\\/', '/').replace('\\/','/')
+                    caption_text = self._download_caption_file(clean_url)
+                    if caption_text and len(caption_text.strip()) > 100:
+                        return caption_text
             
             return None
             
@@ -168,15 +194,36 @@ class CaptionScraper:
         return None
 
     def _parse_xml_captions(self, xml_content: str) -> str:
-        """Parse XML caption format"""
-        text_matches = re.findall(r'<text[^>]*>([^<]+)</text>', xml_content)
-        combined_text = ' '.join([self._clean_text(text) for text in text_matches])
-        return combined_text
+        """Parse XML caption format (YouTube's timedtext format)"""
+        # Extract text from <text> tags, handling both simple and complex formats
+        text_patterns = [
+            r'<text[^>]*>([^<]+)</text>',
+            r'<text[^>]*><!\[CDATA\[([^\]]+)\]\]></text>',
+            r'<text[^>]*>([^<]*(?:<[^/][^>]*>[^<]*</[^>]*>[^<]*)*)</text>'
+        ]
+        
+        all_text = []
+        for pattern in text_patterns:
+            matches = re.findall(pattern, xml_content, re.DOTALL)
+            for match in matches:
+                cleaned = self._clean_text(match)
+                if cleaned and len(cleaned) > 2:
+                    all_text.append(cleaned)
+        
+        if all_text:
+            return ' '.join(all_text)
+        
+        # Fallback: extract any text content
+        simple_text = re.sub(r'<[^>]+>', ' ', xml_content)
+        return self._clean_text(simple_text)
 
     def _parse_json_captions(self, json_content: str) -> str:
         """Parse JSON caption format"""
         try:
+            import json
             data = json.loads(json_content)
+            
+            # Handle YouTube's JSON3 format
             if 'events' in data:
                 text_parts = []
                 for event in data['events']:
@@ -184,13 +231,39 @@ class CaptionScraper:
                         for seg in event['segs']:
                             if 'utf8' in seg:
                                 text_parts.append(seg['utf8'])
-                return ' '.join(text_parts)
-        except:
+                    elif 'dDurationMs' in event and 'segs' not in event:
+                        # Sometimes text is directly in the event
+                        if 'utf8' in event:
+                            text_parts.append(event['utf8'])
+                
+                if text_parts:
+                    return ' '.join([self._clean_text(text) for text in text_parts])
+            
+            # Handle other JSON formats
+            if 'body' in data:
+                text_parts = []
+                for item in data.get('body', []):
+                    if isinstance(item, dict) and 'content' in item:
+                        text_parts.append(item['content'])
+                if text_parts:
+                    return ' '.join([self._clean_text(text) for text in text_parts])
+                    
+        except json.JSONDecodeError:
             pass
         
-        # Fallback: regex extraction
-        text_matches = re.findall(r'"text"\s*:\s*"([^"]+)"', json_content)
-        return ' '.join([self._clean_text(text) for text in text_matches])
+        # Fallback: regex extraction for any JSON-like text
+        text_patterns = [
+            r'"text"\s*:\s*"([^"]+)"',
+            r'"utf8"\s*:\s*"([^"]+)"',
+            r'"content"\s*:\s*"([^"]+)"'
+        ]
+        
+        all_matches = []
+        for pattern in text_patterns:
+            matches = re.findall(pattern, json_content)
+            all_matches.extend([self._clean_text(text) for text in matches])
+        
+        return ' '.join(all_matches)
 
     def _clean_text(self, text: str) -> str:
         """Clean and normalize text"""
