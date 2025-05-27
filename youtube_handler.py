@@ -178,13 +178,19 @@ class YouTubeHandler:
             }
             
             url = f"https://www.youtube.com/watch?v={video_id}"
+            
+            # Get enhanced metadata using API if available
+            api_metadata = self._get_video_metadata_with_api(video_id)
+            
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 # Extract video info first
                 info = ydl.extract_info(url, download=False)
-                title = info.get('title', f'Video {video_id}')
-                duration = info.get('duration')
-                upload_date = info.get('upload_date')
-                channel = info.get('uploader')
+                
+                # Use API metadata if available, fallback to yt-dlp
+                title = api_metadata.get('title') or info.get('title', f'Video {video_id}')
+                duration = api_metadata.get('duration') or info.get('duration')
+                upload_date = api_metadata.get('date') or info.get('upload_date')
+                channel = api_metadata.get('channel') or info.get('uploader')
                 
                 # Format date
                 if upload_date:

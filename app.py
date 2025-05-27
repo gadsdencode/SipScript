@@ -110,29 +110,24 @@ def main():
         # Extraction method selection
         st.subheader("Choose Transcript Extraction Method")
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         
         with col1:
-            st.markdown("**📝 Caption-Based**")
-            st.markdown("• Fast and efficient")
-            st.markdown("• Uses YouTube captions")
-            st.markdown("• May be blocked")
+            st.markdown("**📝 Caption-Based (Fast)**")
+            st.markdown("• Quick extraction from existing captions")
+            st.markdown("• Works when captions are available")
+            st.markdown("• May be blocked on some networks")
             
         with col2:
-            st.markdown("**🔐 API-Authenticated**")
-            st.markdown("• Uses your API key")
-            st.markdown("• Bypasses blocking")
-            st.markdown("• Most reliable")
-            
-        with col3:
-            st.markdown("**🎤 Audio-Based**")
-            st.markdown("• Speech recognition")
-            st.markdown("• Works without captions")
-            st.markdown("• Takes longer")
+            st.markdown("**🎤 Audio-Based (Most Reliable)**")
+            st.markdown("• Advanced speech recognition with Whisper AI")
+            st.markdown("• Works even without existing captions")
+            st.markdown("• Uses your API key for enhanced video info")
+            st.markdown("• Takes 2-5 minutes but very reliable")
         
         extraction_method = st.radio(
             "Select extraction method:",
-            ["Caption-Based (Fast)", "API-Authenticated (Reliable)", "Audio-Based (High Quality)"],
+            ["Caption-Based (Fast)", "Audio-Based (Most Reliable)"],
             horizontal=True
         )
         
@@ -169,29 +164,14 @@ def main():
                         transcript_data = youtube_handler.extract_transcript(video_id)
                         
                         if not transcript_data:
-                            st.error("Could not extract transcript from captions. Try the API-Authenticated method instead.")
+                            st.error("Could not extract transcript from captions. Try the Audio-Based method instead.")
                             return
                         
                         st.success("Transcript extracted successfully from captions!")
                         
                     except Exception as e:
                         st.error(f"Error extracting transcript from captions: {str(e)}")
-                        st.info("💡 Tip: Try the API-Authenticated method to bypass blocking restrictions.")
-                        return
-            elif "API-Authenticated" in extraction_method:
-                with st.spinner("Extracting transcript using authenticated YouTube API..."):
-                    try:
-                        transcript_data = youtube_handler.extract_transcript_with_api(video_id)
-                        
-                        if not transcript_data:
-                            st.error("Could not extract transcript using API. Try the Audio-Based method instead.")
-                            return
-                        
-                        st.success("Transcript extracted successfully using authenticated API!")
-                        
-                    except Exception as e:
-                        st.error(f"Error extracting transcript with API: {str(e)}")
-                        st.info("💡 Tip: Try the Audio-Based extraction method as an alternative.")
+                        st.info("💡 Tip: Try the Audio-Based extraction method which works reliably.")
                         return
             else:
                 # Audio-based extraction with progress updates
