@@ -8,11 +8,77 @@ import requests
 import yt_dlp
 import whisper
 from pydub import AudioSegment
+from googleapiclient.discovery import build
 
 class YouTubeHandler:
     def __init__(self):
         """Initialize YouTube handler"""
         self.whisper_model = None  # Load model only when needed to save memory
+        self.youtube_api = None
+        self._init_youtube_api()
+    
+    def _init_youtube_api(self):
+        """Initialize YouTube Data API with authentication"""
+        try:
+            api_key = os.getenv('YOUTUBE_API_KEY')
+            if api_key:
+                self.youtube_api = build('youtube', 'v3', developerKey=api_key)
+                print("YouTube API initialized successfully with authentication")
+            else:
+                print("YouTube API key not found, using fallback methods")
+        except Exception as e:
+            print(f"Failed to initialize YouTube API: {e}")
+    
+    def _get_video_metadata_with_api(self, video_id: str) -> Dict:
+        """Get video metadata using authenticated YouTube Data API"""
+        try:
+            if self.youtube_api:
+                request = self.youtube_api.videos().list(
+                    part="snippet,contentDetails",
+                    id=video_id
+                )
+                response = request.execute()
+                
+                if response['items']:
+                    video = response['items'][0]
+                    snippet = video['snippet']
+                    
+                    # Parse duration if available
+                    duration = None
+                    if 'contentDetails' in video and 'duration' in video['contentDetails']:
+                        duration_str = video['contentDetails']['duration']
+                        # Convert ISO 8601 duration to seconds (PT1H2M3S format)
+                        match = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', duration_str)
+                        if match:
+                            hours, minutes, seconds = match.groups()
+                            duration = (int(hours or 0) * 3600 + 
+                                      int(minutes or 0) * 60 + 
+                                      int(seconds or 0))
+                    
+                    # Parse upload date
+                    upload_date = snippet.get('publishedAt', '')
+                    try:
+                        date_obj = datetime.fromisoformat(upload_date.replace('Z', '+00:00'))
+                        formatted_date = date_obj.strftime('%Y-%m-%d')
+                    except:
+                        formatted_date = datetime.now().strftime('%Y-%m-%d')
+                    
+                    return {
+                        'title': self._clean_title(snippet.get('title', f'Video {video_id}')),
+                        'date': formatted_date,
+                        'channel': snippet.get('channelTitle', 'Unknown Channel'),
+                        'duration': duration
+                    }
+        except Exception as e:
+            print(f"API metadata extraction failed: {e}")
+        
+        # Fallback metadata
+        return {
+            'title': f"Coffee with Scott Adams - Episode {video_id}",
+            'date': datetime.now().strftime('%Y-%m-%d'),
+            'channel': "Scott Adams",
+            'duration': None
+        }
     
     def extract_video_id(self, url: str) -> Optional[str]:
         """Extract video ID from various YouTube URL formats"""
