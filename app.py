@@ -107,6 +107,29 @@ def main():
             placeholder="https://www.youtube.com/watch?v=..."
         )
         
+        # Extraction method selection
+        st.subheader("Choose Transcript Extraction Method")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**📝 Caption-Based Extraction**")
+            st.markdown("• Fast and efficient")
+            st.markdown("• Uses existing YouTube captions")
+            st.markdown("• Best for videos with good captions")
+            
+        with col2:
+            st.markdown("**🎤 Audio-Based Extraction**")
+            st.markdown("• High accuracy speech recognition")
+            st.markdown("• Works when captions aren't available")
+            st.markdown("• Takes longer but more reliable")
+        
+        extraction_method = st.radio(
+            "Select extraction method:",
+            ["Caption-Based (Fast)", "Audio-Based (High Quality)"],
+            horizontal=True
+        )
+        
         if st.button("Extract and Process Transcript", disabled=not youtube_url):
             video_id = validate_youtube_url(youtube_url)
             
@@ -121,26 +144,56 @@ def main():
                 st.info(f"Episode Title: {existing_episode['title']}")
                 return
             
-            with st.spinner("Extracting transcript from YouTube..."):
-                try:
-                    # Extract transcript and metadata
-                    transcript_data = youtube_handler.extract_transcript(video_id)
-                    
-                    if not transcript_data:
-                        st.error("Could not extract transcript from this video. The video might not have captions available.")
+            # Choose extraction method based on user selection
+            if "Caption-Based" in extraction_method:
+                with st.spinner("Extracting transcript from YouTube captions..."):
+                    try:
+                        transcript_data = youtube_handler.extract_transcript(video_id)
+                        
+                        if not transcript_data:
+                            st.error("Could not extract transcript from captions. Try the Audio-Based method instead.")
+                            return
+                        
+                        st.success("Transcript extracted successfully from captions!")
+                        
+                    except Exception as e:
+                        st.error(f"Error extracting transcript from captions: {str(e)}")
+                        st.info("💡 Tip: Try the Audio-Based extraction method if captions aren't available.")
                         return
-                    
-                    st.success("Transcript extracted successfully!")
-                    
-                    # Display raw transcript preview
-                    st.subheader("Raw Transcript Preview:")
-                    st.text_area("Raw transcript (first 500 characters):", 
-                               transcript_data['transcript'][:500] + "...", 
-                               height=150, disabled=True)
-                    
-                except Exception as e:
-                    st.error(f"Error extracting transcript: {str(e)}")
-                    return
+            else:
+                # Audio-based extraction with progress updates
+                progress_placeholder = st.empty()
+                
+                def progress_callback(message):
+                    progress_placeholder.info(f"🎵 {message}")
+                
+                with st.spinner("Extracting transcript from audio... This may take several minutes."):
+                    try:
+                        transcript_data = youtube_handler.extract_transcript_from_audio(
+                            video_id, 
+                            progress_callback=progress_callback
+                        )
+                        
+                        if not transcript_data:
+                            st.error("Could not extract transcript from audio. Please try a different video.")
+                            return
+                        
+                        progress_placeholder.empty()
+                        st.success("Transcript extracted successfully from audio!")
+                        
+                    except Exception as e:
+                        progress_placeholder.empty()
+                        st.error(f"Error extracting transcript from audio: {str(e)}")
+                        st.info("💡 Tip: Try the Caption-Based extraction method if available.")
+                        return
+            
+            # Display raw transcript preview
+            st.subheader("Raw Transcript Preview:")
+            extraction_type = transcript_data.get('extraction_method', 'caption')
+            st.caption(f"Extracted using: {extraction_type}-based method")
+            st.text_area("Raw transcript (first 500 characters):", 
+                       transcript_data['transcript'][:500] + "...", 
+                       height=150, disabled=True)
             
             with st.spinner("Enhancing transcript with AI..."):
                 try:

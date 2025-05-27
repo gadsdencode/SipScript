@@ -24,6 +24,7 @@ class DatabaseManager:
                     url TEXT NOT NULL,
                     raw_transcript TEXT NOT NULL,
                     enhanced_transcript TEXT NOT NULL,
+                    extraction_method TEXT DEFAULT 'caption',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )

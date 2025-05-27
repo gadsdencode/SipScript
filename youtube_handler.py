@@ -1,13 +1,18 @@
 import re
+import os
+import tempfile
 from datetime import datetime
 from typing import Optional, Dict
 from youtube_transcript_api import YouTubeTranscriptApi
 import requests
+import yt_dlp
+import whisper
+from pydub import AudioSegment
 
 class YouTubeHandler:
     def __init__(self):
         """Initialize YouTube handler"""
-        pass
+        self.whisper_model = None  # Load model only when needed to save memory
     
     def extract_video_id(self, url: str) -> Optional[str]:
         """Extract video ID from various YouTube URL formats"""
@@ -57,6 +62,111 @@ class YouTubeHandler:
         except Exception as e:
             print(f"Error extracting transcript for video {video_id}: {str(e)}")
             return None
+
+    def extract_transcript_from_audio(self, video_id: str, progress_callback=None) -> Optional[Dict]:
+        """
+        Extract transcript from YouTube video audio using Whisper AI
+        This method downloads audio and uses speech recognition for transcription
+        """
+        temp_dir = None
+        try:
+            # Create temporary directory for audio files
+            temp_dir = tempfile.mkdtemp()
+            audio_path = os.path.join(temp_dir, f"{video_id}.wav")
+            
+            if progress_callback:
+                progress_callback("Downloading audio from YouTube...")
+            
+            # Download audio using yt-dlp
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'outtmpl': os.path.join(temp_dir, f"{video_id}.%(ext)s"),
+                'extractaudio': True,
+                'audioformat': 'wav',
+                'quiet': True,
+                'no_warnings': True,
+            }
+            
+            url = f"https://www.youtube.com/watch?v={video_id}"
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                # Extract video info first
+                info = ydl.extract_info(url, download=False)
+                title = info.get('title', f'Video {video_id}')
+                duration = info.get('duration')
+                upload_date = info.get('upload_date')
+                channel = info.get('uploader')
+                
+                # Format date
+                if upload_date:
+                    try:
+                        date_obj = datetime.strptime(upload_date, '%Y%m%d')
+                        formatted_date = date_obj.strftime('%Y-%m-%d')
+                    except:
+                        formatted_date = datetime.now().strftime('%Y-%m-%d')
+                else:
+                    formatted_date = datetime.now().strftime('%Y-%m-%d')
+                
+                # Download audio
+                ydl.download([url])
+            
+            # Find the downloaded audio file
+            downloaded_files = [f for f in os.listdir(temp_dir) if f.startswith(video_id)]
+            if not downloaded_files:
+                raise Exception("Failed to download audio file")
+            
+            audio_file = os.path.join(temp_dir, downloaded_files[0])
+            
+            if progress_callback:
+                progress_callback("Converting audio format...")
+            
+            # Convert to WAV if needed
+            if not audio_file.endswith('.wav'):
+                audio = AudioSegment.from_file(audio_file)
+                audio.export(audio_path, format="wav")
+            else:
+                audio_path = audio_file
+            
+            if progress_callback:
+                progress_callback("Loading speech recognition model...")
+            
+            # Load Whisper model if not already loaded
+            if self.whisper_model is None:
+                self.whisper_model = whisper.load_model("base")  # You can use "small", "medium", "large" for better accuracy
+            
+            if progress_callback:
+                progress_callback("Transcribing audio... This may take a few minutes.")
+            
+            # Transcribe audio
+            result = self.whisper_model.transcribe(audio_path)
+            transcript_text = result["text"]
+            
+            if not transcript_text or len(transcript_text.strip()) < 50:
+                raise ValueError("Generated transcript is too short or empty")
+            
+            # Clean up the transcript
+            cleaned_transcript = self._clean_whisper_transcript(transcript_text)
+            
+            return {
+                'transcript': cleaned_transcript,
+                'title': self._clean_title(title),
+                'date': formatted_date,
+                'duration': duration,
+                'channel': channel,
+                'video_id': video_id,
+                'extraction_method': 'audio'  # Mark this as audio-extracted
+            }
+            
+        except Exception as e:
+            print(f"Error extracting transcript from audio for video {video_id}: {str(e)}")
+            return None
+        finally:
+            # Clean up temporary files
+            if temp_dir and os.path.exists(temp_dir):
+                import shutil
+                try:
+                    shutil.rmtree(temp_dir)
+                except:
+                    pass  # Best effort cleanup
     
     def _combine_transcript_segments(self, transcript_list: list) -> str:
         """Combine transcript segments into readable text"""
@@ -204,3 +314,30 @@ class YouTubeHandler:
         except Exception as e:
             print(f"Error getting transcript languages for {video_id}: {str(e)}")
             return []
+
+    def _clean_whisper_transcript(self, text: str) -> str:
+        """Clean Whisper-generated transcript text"""
+        # Remove excessive whitespace
+        text = re.sub(r'\s+', ' ', text)
+        
+        # Whisper sometimes adds timestamps or markers, remove them
+        text = re.sub(r'\[\d+:\d+:\d+\.\d+\s*-->\s*\d+:\d+:\d+\.\d+\]', '', text)
+        text = re.sub(r'\d+:\d+\.\d+', '', text)
+        
+        # Clean up common speech recognition artifacts
+        text = re.sub(r'\[MUSIC\]', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\[APPLAUSE\]', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\[LAUGHTER\]', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\[INAUDIBLE\]', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\[UNCLEAR\]', '', text, flags=re.IGNORECASE)
+        
+        # Remove common filler words that speech recognition might capture
+        text = re.sub(r'\b(uh|um|er|ah)\b', '', text, flags=re.IGNORECASE)
+        
+        # Ensure proper sentence spacing
+        text = re.sub(r'([.!?])\s*([A-Z])', r'\1 \2', text)
+        
+        # Remove multiple spaces
+        text = re.sub(r'\s+', ' ', text)
+        
+        return text.strip()
