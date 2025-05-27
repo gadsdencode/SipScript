@@ -30,6 +30,13 @@ class DatabaseManager:
                 )
             """)
             
+            # Add extraction_method column if it doesn't exist (for existing databases)
+            try:
+                cursor.execute("ALTER TABLE episodes ADD COLUMN extraction_method TEXT DEFAULT 'caption'")
+            except sqlite3.OperationalError:
+                # Column already exists
+                pass
+            
             # Create index for better search performance
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_episodes_video_id ON episodes(video_id)

@@ -130,6 +130,17 @@ def main():
             horizontal=True
         )
         
+        # Show quality options for audio-based extraction
+        if "Audio-Based" in extraction_method:
+            st.info("💡 **Tip:** Audio extraction takes longer but works when captions aren't available. Processing time: 2-5 minutes for typical episodes.")
+            
+            quality_level = st.selectbox(
+                "Choose processing speed:",
+                ["Fast (tiny model)", "Balanced (base model)", "Best Quality (small model)"],
+                index=0,
+                help="Fast: ~2 min, Balanced: ~4 min, Best: ~6 min for typical episodes"
+            )
+        
         if st.button("Extract and Process Transcript", disabled=not youtube_url):
             video_id = validate_youtube_url(youtube_url)
             
@@ -171,7 +182,8 @@ def main():
                     try:
                         transcript_data = youtube_handler.extract_transcript_from_audio(
                             video_id, 
-                            progress_callback=progress_callback
+                            progress_callback=progress_callback,
+                            quality_level=quality_level.split(" (")[0]  # Extract just "Fast", "Balanced", or "Best Quality"
                         )
                         
                         if not transcript_data:

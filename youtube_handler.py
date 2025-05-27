@@ -63,7 +63,7 @@ class YouTubeHandler:
             print(f"Error extracting transcript for video {video_id}: {str(e)}")
             return None
 
-    def extract_transcript_from_audio(self, video_id: str, progress_callback=None) -> Optional[Dict]:
+    def extract_transcript_from_audio(self, video_id: str, progress_callback=None, quality_level="Fast") -> Optional[Dict]:
         """
         Extract transcript from YouTube video audio using Whisper AI
         This method downloads audio and uses speech recognition for transcription
@@ -77,12 +77,13 @@ class YouTubeHandler:
             if progress_callback:
                 progress_callback("Downloading audio from YouTube...")
             
-            # Download audio using yt-dlp
+            # Download audio using yt-dlp with optimized settings
             ydl_opts = {
-                'format': 'bestaudio/best',
+                'format': 'worstaudio/worst',  # Use lower quality for faster processing
                 'outtmpl': os.path.join(temp_dir, f"{video_id}.%(ext)s"),
                 'extractaudio': True,
-                'audioformat': 'wav',
+                'audioformat': 'mp3',  # MP3 is smaller and faster to process
+                'audioquality': '9',   # Lower quality for speed
                 'quiet': True,
                 'no_warnings': True,
             }
@@ -119,25 +120,49 @@ class YouTubeHandler:
             if progress_callback:
                 progress_callback("Converting audio format...")
             
-            # Convert to WAV if needed
-            if not audio_file.endswith('.wav'):
-                audio = AudioSegment.from_file(audio_file)
-                audio.export(audio_path, format="wav")
-            else:
-                audio_path = audio_file
+            # Convert and compress audio for faster processing
+            audio = AudioSegment.from_file(audio_file)
+            
+            # Compress audio: reduce sample rate and convert to mono for speed
+            audio = audio.set_frame_rate(16000)  # Lower sample rate for faster processing
+            audio = audio.set_channels(1)       # Convert to mono
+            
+            # Export as WAV for Whisper
+            audio_path = os.path.join(temp_dir, f"{video_id}_compressed.wav")
+            audio.export(audio_path, format="wav")
             
             if progress_callback:
                 progress_callback("Loading speech recognition model...")
             
-            # Load Whisper model if not already loaded
-            if self.whisper_model is None:
-                self.whisper_model = whisper.load_model("base")  # You can use "small", "medium", "large" for better accuracy
+            # Load Whisper model based on quality level
+            model_map = {
+                "Fast": "tiny",
+                "Balanced": "base", 
+                "Best Quality": "small"
+            }
+            
+            model_size = model_map.get(quality_level, "tiny")
+            
+            if self.whisper_model is None or getattr(self, '_current_model_size', None) != model_size:
+                if progress_callback:
+                    progress_callback(f"Loading {model_size} speech recognition model...")
+                self.whisper_model = whisper.load_model(model_size)
+                self._current_model_size = model_size
             
             if progress_callback:
                 progress_callback("Transcribing audio... This may take a few minutes.")
             
-            # Transcribe audio
-            result = self.whisper_model.transcribe(audio_path)
+            # Transcribe audio with optimized settings
+            result = self.whisper_model.transcribe(
+                audio_path,
+                fp16=False,  # Use FP32 for CPU compatibility
+                verbose=False,  # Reduce output
+                language="en",  # Assume English for Scott Adams podcasts
+                temperature=0.0,  # More consistent results
+                compression_ratio_threshold=2.4,  # Prevent cutting off content
+                logprob_threshold=-1.0,  # Include more uncertain words
+                no_speech_threshold=0.6  # Better handling of quiet sections
+            )
             transcript_text = result["text"]
             
             if not transcript_text or len(transcript_text.strip()) < 50:
