@@ -10,7 +10,10 @@ class TranscriptProcessor:
         if api_key:
             self.client = OpenAI(api_key=api_key)
         else:
-            api_key = os.getenv("OPENAI_API_KEY", "your-openai-api-key-here")
+            api_key = os.getenv("OPENAI_API_KEY")
+            if not api_key:
+                print("Warning: No OpenAI API key provided or found in environment variables.")
+                print("AI-powered features will not work correctly.")
             self.client = OpenAI(api_key=api_key)
     
     def enhance_transcript(self, raw_transcript: str) -> str:

@@ -4,17 +4,21 @@ import re
 import csv
 import io
 import sqlite3
+import os
 from datetime import datetime
+from dotenv import load_dotenv
 from database import DatabaseManager
 from youtube_handler import YouTubeHandler
 from transcript_processor import TranscriptProcessor
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Initialize components
 @st.cache_resource
 def initialize_components():
     # Get OpenAI API key
-    import os
-    openai_api_key = os.getenv("OPENAI_API_KEY", "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")
+    openai_api_key = os.getenv("OPENAI_API_KEY")
     
     db = DatabaseManager()
     youtube_handler = YouTubeHandler()
@@ -235,11 +239,10 @@ def main():
     st.markdown("---")
     
     # Check for OpenAI API key
-    import os
-    openai_api_key = os.getenv("OPENAI_API_KEY", "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")
+    openai_api_key = os.getenv("OPENAI_API_KEY")
     
-    # Only show warning if API key is truly missing (not when using our hardcoded default)
-    if not openai_api_key or openai_api_key == "your-openai-api-key-here":
+    # Show warning if API key is missing
+    if not openai_api_key:
         st.warning("""
         ⚠️ **OpenAI API Key Not Configured**
         
@@ -247,7 +250,7 @@ def main():
         
         To fix this:
         1. Get an API key from [OpenAI Platform](https://platform.openai.com/api-keys)
-        2. Set it as an environment variable named `OPENAI_API_KEY`
+        2. Set it as an environment variable named `OPENAI_API_KEY` in your .env file
         
         Without this key, topic extraction and summary generation will fail.
         """)
@@ -770,12 +773,17 @@ def main():
                         with tab2:
                             # Apply highlighting using HTML spans
                             highlighted_transcript = full_transcript
-                            for term in search_terms:
+                            
+                            # Create different colors for different search terms
+                            colors = ['#ffeb3b', '#ff9800', '#4caf50', '#2196f3', '#9c27b0', '#f44336']
+                            
+                            for i, term in enumerate(search_terms):
                                 if term:
+                                    color = colors[i % len(colors)]
                                     # Replace all instances with highlighted version
                                     pattern = re.compile(f'({re.escape(term)})', re.IGNORECASE)
                                     highlighted_transcript = pattern.sub(
-                                        r'<span style="background-color: yellow; font-weight: bold; padding: 2px; color: black;">\1</span>',
+                                        f'<span style="background-color: {color}; font-weight: bold; padding: 2px; color: black;">\\1</span>',
                                         highlighted_transcript
                                     )
                             
@@ -1082,7 +1090,6 @@ def main():
             
             with db_info_tab:
                 # Show database file info
-                import os
                 db_path = db.db_path
                 if os.path.exists(db_path):
                     file_size = os.path.getsize(db_path)

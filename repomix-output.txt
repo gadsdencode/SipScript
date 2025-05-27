@@ -1,0 +1,2981 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+================================================================
+File Summary
+================================================================
+
+Purpose:
+--------
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+
+File Format:
+------------
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  a. A separator line (================)
+  b. The file path (File: path/to/file)
+  c. Another separator line
+  d. The full contents of the file
+  e. A blank line
+
+Usage Guidelines:
+-----------------
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+
+Notes:
+------
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+
+
+================================================================
+Directory Structure
+================================================================
+.gitignore
+.replit
+.streamlit/config.toml
+app.py
+attached_assets/Pasted-If-you-are-sure-that-the-described-cause-is-not-responsible-for-this-error-and-that-a-transcript-sho-1748309889474.txt
+caption_scraper.py
+database.py
+debug_captions.py
+pyproject.toml
+transcript_processor.py
+youtube_handler.py
+
+================================================================
+Files
+================================================================
+
+================
+File: .streamlit/config.toml
+================
+[server]
+headless = true
+address = "0.0.0.0"
+port = 5000
+
+================
+File: attached_assets/Pasted-If-you-are-sure-that-the-described-cause-is-not-responsible-for-this-error-and-that-a-transcript-sho-1748309889474.txt
+================
+If you are sure that the described cause is not responsible for this error and that a transcript should be retrievable, please create an issue at https://github.com/jdepoix/youtube-transcript-api/issues. Please add which version of youtube_transcript_api you are using and provide the information needed to replicate the error. Also make sure that there are no open issues which already describe your problem!
+ERROR: [youtube] n_M_DCX5sxk: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+Error extracting transcript from audio for video n_M_DCX5sxk: ERROR: [youtube] n_M_DCX5sxk: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+2025-05-27 01:37:30.057 Examining the path of torch.classes raised:
+Traceback (most recent call last):
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/web/bootstrap.py", line 347, in run
+    if asyncio.get_running_loop().is_running():
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: no running event loop
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/watcher/local_sources_watcher.py", line 217, in get_module_paths
+    potential_paths = extract_paths(module)
+                      ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/watcher/local_sources_watcher.py", line 210, in <lambda>
+    lambda m: list(m.__path__._path),
+                   ^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/torch/_classes.py", line 13, in __getattr__
+    proxy = torch._C._get_custom_class_python_wrapper(self.name, attr)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Tried to instantiate class '__path__._path', but it does not exist! Ensure that it is registered via torch::class_
+ERROR: [youtube] n_M_DCX5sxk: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies
+Error extracting transcript from audio for video n_M_DCX5sxk: ERROR: [youtube] n_M_DCX5sxk: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookie
+
+================
+File: debug_captions.py
+================
+import requests
+import re
+import json
+
+def debug_youtube_captions(video_id):
+    """Debug what caption data is available in YouTube page"""
+    url = f"https://www.youtube.com/watch?v={video_id}"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+    }
+    
+    print(f"Fetching: {url}")
+    response = requests.get(url, headers=headers)
+    
+    if response.status_code != 200:
+        print(f"Failed to fetch page: {response.status_code}")
+        return
+    
+    html = response.text
+    print(f"Page size: {len(html)} characters")
+    
+    # Look for player config
+    player_config_pattern = r'ytInitialPlayerResponse\s*=\s*({.+?});'
+    match = re.search(player_config_pattern, html)
+    
+    if match:
+        print("Found ytInitialPlayerResponse")
+        try:
+            config_json = match.group(1)
+            player_data = json.loads(config_json)
+            
+            # Check for captions
+            captions = player_data.get('captions', {})
+            print(f"Captions object: {bool(captions)}")
+            
+            if captions:
+                renderer = captions.get('playerCaptionsTracklistRenderer', {})
+                print(f"Caption renderer: {bool(renderer)}")
+                
+                tracks = renderer.get('captionTracks', [])
+                print(f"Found {len(tracks)} caption tracks")
+                
+                for i, track in enumerate(tracks):
+                    lang = track.get('languageCode', 'unknown')
+                    name = track.get('name', {}).get('simpleText', 'No name')
+                    kind = track.get('kind', 'standard')
+                    has_url = 'baseUrl' in track
+                    print(f"  Track {i}: {lang} - {name} - {kind} - Has URL: {has_url}")
+                    
+                    if has_url and lang.startswith('en'):
+                        print(f"    URL: {track['baseUrl'][:100]}...")
+                        return track['baseUrl']
+        except json.JSONDecodeError as e:
+            print(f"JSON decode error: {e}")
+    else:
+        print("No ytInitialPlayerResponse found")
+    
+    # Look for any caption-related URLs
+    caption_patterns = [
+        r'"baseUrl":"([^"]*timedtext[^"]*)"',
+        r'"baseUrl":"([^"]*caption[^"]*)"',
+        r'(https://www\.youtube\.com/api/timedtext[^"]*)'
+    ]
+    
+    all_urls = []
+    for pattern in caption_patterns:
+        urls = re.findall(pattern, html)
+        all_urls.extend(urls)
+    
+    print(f"Found {len(all_urls)} potential caption URLs")
+    for url in all_urls[:3]:  # Show first 3
+        print(f"  {url[:100]}...")
+    
+    return all_urls[0] if all_urls else None
+
+if __name__ == "__main__":
+    # Test with a known video
+    video_id = "3CD0kEPePrE"  # Replace with actual video ID
+    caption_url = debug_youtube_captions(video_id)
+    
+    if caption_url:
+        print(f"\nTrying to download caption file...")
+        try:
+            clean_url = caption_url.replace('\\u0026', '&').replace('\\/', '/')
+            response = requests.get(clean_url)
+            print(f"Caption response status: {response.status_code}")
+            print(f"Caption content length: {len(response.text)}")
+            print(f"First 200 chars: {response.text[:200]}")
+        except Exception as e:
+            print(f"Error downloading captions: {e}")
+
+================
+File: .gitignore
+================
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+.env
+
+================
+File: .replit
+================
+modules = ["python-3.11"]
+
+[nix]
+channel = "stable-24_05"
+packages = ["ffmpeg-full", "glibcLocales"]
+
+[deployment]
+deploymentTarget = "autoscale"
+run = ["streamlit", "run", "app.py", "--server.port", "5000"]
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Streamlit App"
+
+[[workflows.workflow]]
+name = "Streamlit App"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "streamlit run app.py --server.port 5000"
+waitForPort = 5000
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+================
+File: transcript_processor.py
+================
+import os
+import re
+from typing import Optional, Dict, Union, List
+from openai import OpenAI
+
+class TranscriptProcessor:
+    def __init__(self, api_key=None):
+        """Initialize transcript processor with OpenAI client"""
+        # Use provided API key or fall back to environment variable
+        if api_key:
+            self.client = OpenAI(api_key=api_key)
+        else:
+            api_key = os.getenv("OPENAI_API_KEY", "your-openai-api-key-here")
+            self.client = OpenAI(api_key=api_key)
+    
+    def enhance_transcript(self, raw_transcript: str) -> str:
+        """
+        Enhance raw transcript using OpenAI API
+        Clean up grammar, punctuation, and improve readability
+        """
+        if not raw_transcript or not raw_transcript.strip():
+            raise ValueError("Raw transcript is empty or invalid")
+        
+        # Split long transcripts into chunks to avoid token limits
+        chunks = self._split_transcript(raw_transcript)
+        enhanced_chunks = []
+        
+        for chunk in chunks:
+            try:
+                enhanced_chunk = self._process_chunk(chunk)
+                enhanced_chunks.append(enhanced_chunk)
+            except Exception as e:
+                # If processing fails, use the original chunk
+                print(f"Warning: Failed to enhance chunk: {str(e)}")
+                enhanced_chunks.append(chunk)
+        
+        return "\n\n".join(enhanced_chunks)
+    
+    def _split_transcript(self, transcript: str, max_chunk_size: int = 3000) -> list:
+        """Split transcript into manageable chunks for API processing"""
+        # Clean up the transcript first
+        transcript = self._basic_cleanup(transcript)
+        
+        # Split by sentences if possible, otherwise by words
+        sentences = re.split(r'(?<=[.!?])\s+', transcript)
+        
+        chunks = []
+        current_chunk = ""
+        
+        for sentence in sentences:
+            if len(current_chunk) + len(sentence) + 1 <= max_chunk_size:
+                current_chunk += sentence + " "
+            else:
+                if current_chunk.strip():
+                    chunks.append(current_chunk.strip())
+                current_chunk = sentence + " "
+        
+        if current_chunk.strip():
+            chunks.append(current_chunk.strip())
+        
+        return chunks if chunks else [transcript]
+    
+    def _basic_cleanup(self, text: str) -> str:
+        """Basic cleanup of transcript text"""
+        # Remove excessive whitespace
+        text = re.sub(r'\s+', ' ', text)
+        
+        # Remove timestamp markers if present
+        text = re.sub(r'\[\d+:\d+:\d+\]', '', text)
+        text = re.sub(r'\d+:\d+', '', text)
+        
+        # Clean up common transcript artifacts
+        text = re.sub(r'\[Music\]', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\[Applause\]', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\[Laughter\]', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\[Inaudible\]', '', text, flags=re.IGNORECASE)
+        
+        return text.strip()
+    
+    def _process_chunk(self, chunk: str) -> str:
+        """Process a single chunk using OpenAI API"""
+        prompt = """You are an expert transcript editor. Please clean up the following podcast transcript by:
+
+1. Correcting spelling, grammar, and punctuation errors
+2. Adding proper paragraph breaks for readability
+3. Maintaining the speaker's natural speaking style and voice
+4. Preserving all original content and meaning
+5. Removing any obvious transcription artifacts or repeated words
+6. Ensuring proper capitalization
+
+Important: Do not add, remove, or change the actual content or meaning. Only improve the technical quality of the text.
+
+Transcript to clean:"""
+
+        try:
+            # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
+            # do not change this unless explicitly requested by the user
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a professional transcript editor specializing in podcast content. Your job is to clean up transcripts while preserving the original meaning and speaker's voice."
+                    },
+                    {
+                        "role": "user",
+                        "content": f"{prompt}\n\n{chunk}"
+                    }
+                ],
+                temperature=0.1,  # Low temperature for consistent editing
+                max_tokens=4000
+            )
+            
+            enhanced_text = response.choices[0].message.content.strip()
+            
+            # Basic validation - ensure we got meaningful output
+            if len(enhanced_text) < len(chunk) * 0.5:
+                raise ValueError("Enhanced text is suspiciously short")
+            
+            return enhanced_text
+            
+        except Exception as e:
+            raise Exception(f"OpenAI API error: {str(e)}")
+    
+    def extract_key_topics(self, transcript: str) -> Dict:
+        """Extract key topics and themes from the transcript"""
+        if not transcript or len(transcript.strip()) < 100:
+            return {
+                "topics": [],
+                "key_points": [],
+                "summary": "Transcript too short to summarize"
+            }
+        
+        prompt = """Analyze the following podcast transcript and extract the main topics, themes, and key points discussed. 
+        
+Return your analysis as a JSON object with this structure:
+{
+    "topics": ["topic1", "topic2", "topic3"],
+    "key_points": ["point1", "point2", "point3"],
+    "summary": "Brief summary of the episode"
+}
+
+Focus on substantial topics and avoid minor tangents."""
+
+        try:
+            # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
+            # do not change this unless explicitly requested by the user
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert at analyzing podcast content and extracting key themes and topics."
+                    },
+                    {
+                        "role": "user", 
+                        "content": f"{prompt}\n\nTranscript:\n{transcript[:4000]}"  # Limit input length
+                    }
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.3
+            )
+            
+            import json
+            try:
+                result = json.loads(response.choices[0].message.content)
+                # Validate the result has the expected structure
+                if not isinstance(result, dict):
+                    raise ValueError("Result is not a dictionary")
+                
+                # Ensure all expected keys exist
+                result.setdefault("topics", [])
+                result.setdefault("key_points", [])
+                result.setdefault("summary", "No summary generated")
+                
+                return result
+            except json.JSONDecodeError as e:
+                print(f"Warning: Failed to parse JSON response: {str(e)}")
+                return {
+                    "topics": [],
+                    "key_points": [],
+                    "summary": "Failed to parse topic extraction results"
+                }
+            
+        except Exception as e:
+            print(f"Warning: Failed to extract topics: {str(e)}")
+            return {
+                "topics": [],
+                "key_points": [],
+                "summary": "Topic extraction failed"
+            }
+    
+    def generate_summary(self, transcript: str, max_length: int = 500) -> str:
+        """Generate a concise summary of the transcript"""
+        if not transcript or len(transcript.strip()) < 100:
+            return "Transcript too short to summarize"
+        
+        prompt = f"""Please provide a concise summary of this podcast transcript in approximately {max_length} characters. 
+        Focus on the main points, key discussions, and any notable insights shared.
+        
+        Transcript:"""
+        
+        try:
+            # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
+            # do not change this unless explicitly requested by the user
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert at creating concise, informative summaries of podcast content."
+                    },
+                    {
+                        "role": "user",
+                        "content": f"{prompt}\n\n{transcript[:4000]}"
+                    }
+                ],
+                temperature=0.2,
+                max_tokens=200
+            )
+            
+            return response.choices[0].message.content.strip()
+            
+        except Exception as e:
+            return f"Summary generation failed: {str(e)}"
+
+================
+File: caption_scraper.py
+================
+import re
+import requests
+import json
+from urllib.parse import unquote
+from typing import Optional, Dict
+
+class CaptionScraper:
+    def __init__(self):
+        self.session = requests.Session()
+        self.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        })
+
+    def extract_captions_from_page(self, video_id: str) -> Optional[Dict]:
+        """
+        Extract captions directly from YouTube using multiple strategies
+        """
+        try:
+            # Strategy 1: Try direct timedtext API
+            caption_text = self._try_direct_timedtext_api(video_id)
+            
+            if not caption_text:
+                # Strategy 2: Try transcript page scraping
+                caption_text = self._try_transcript_page_scraping(video_id)
+            
+            if not caption_text or len(caption_text.strip()) < 50:
+                return None
+            
+            # Get basic metadata
+            title, upload_date, channel = self._get_basic_metadata(video_id)
+            
+            return {
+                'transcript': caption_text,
+                'title': title or f'Video {video_id}',
+                'date': upload_date or '2024-01-01',
+                'channel': channel or 'Unknown Channel',
+                'video_id': video_id,
+                'extraction_method': 'web_scraping'
+            }
+            
+        except Exception as e:
+            print(f"Error scraping captions for {video_id}: {e}")
+            return None
+
+    def _try_direct_timedtext_api(self, video_id: str) -> Optional[str]:
+        """Try using youtube-transcript-api with authentication"""
+        try:
+            from youtube_transcript_api import YouTubeTranscriptApi
+            import os
+            
+            # Check if we have YouTube cookies for authentication
+            cookies_file = os.environ.get('YOUTUBE_COOKIES')
+            
+            if cookies_file:
+                # Use cookies for authentication to bypass IP blocking
+                transcript_list = YouTubeTranscriptApi.get_transcript(
+                    video_id, 
+                    languages=['en', 'en-US'],
+                    cookies=cookies_file
+                )
+            else:
+                # Try without authentication first
+                transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'en-US'])
+            
+            if transcript_list:
+                # Combine all text segments
+                full_text = ' '.join([item['text'] for item in transcript_list])
+                return self._clean_text(full_text)
+                
+        except ImportError:
+            print("youtube-transcript-api not available")
+        except Exception as e:
+            if "IP" in str(e) or "blocked" in str(e).lower():
+                print(f"YouTube is blocking requests from this server. Authentication needed: {e}")
+                return "AUTH_REQUIRED"
+            else:
+                print(f"YouTube Transcript API failed: {e}")
+            
+        return None
+
+    def _try_transcript_page_scraping(self, video_id: str) -> Optional[str]:
+        """Try scraping the main video page for embedded captions"""
+        try:
+            url = f"https://www.youtube.com/watch?v={video_id}"
+            response = self.session.get(url, timeout=15)
+            
+            if response.status_code != 200:
+                return None
+            
+            html_content = response.text
+            return self._extract_caption_data(html_content)
+            
+        except Exception as e:
+            print(f"Page scraping failed: {e}")
+            return None
+
+    def _get_basic_metadata(self, video_id: str) -> tuple:
+        """Get basic video metadata"""
+        try:
+            url = f"https://www.youtube.com/watch?v={video_id}"
+            response = self.session.get(url, timeout=10)
+            
+            if response.status_code == 200:
+                html = response.text
+                title = self._extract_title(html)
+                date = self._extract_upload_date(html)
+                channel = self._extract_channel(html)
+                return title, date, channel
+        except:
+            pass
+        
+        return None, None, None
+
+    def _extract_title(self, html: str) -> Optional[str]:
+        """Extract video title from HTML"""
+        patterns = [
+            r'"title"\s*:\s*"([^"]+)"',
+            r'<title>([^<]+)</title>',
+            r'property="og:title"\s+content="([^"]+)"'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, html)
+            if match:
+                title = match.group(1)
+                if ' - YouTube' in title:
+                    title = title.replace(' - YouTube', '')
+                return self._clean_text(title)
+        return None
+
+    def _extract_upload_date(self, html: str) -> Optional[str]:
+        """Extract upload date from HTML"""
+        patterns = [
+            r'"uploadDate"\s*:\s*"([^"]+)"',
+            r'"datePublished"\s*:\s*"([^"]+)"'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, html)
+            if match:
+                date_str = match.group(1)
+                try:
+                    from datetime import datetime
+                    # Parse ISO format date
+                    date_obj = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                    return date_obj.strftime('%Y-%m-%d')
+                except:
+                    continue
+        return None
+
+    def _extract_channel(self, html: str) -> Optional[str]:
+        """Extract channel name from HTML"""
+        patterns = [
+            r'"author"\s*:\s*"([^"]+)"',
+            r'"ownerChannelName"\s*:\s*"([^"]+)"',
+            r'property="og:video:tag"\s+content="([^"]+)"'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, html)
+            if match:
+                return self._clean_text(match.group(1))
+        return None
+
+    def _extract_caption_data(self, html: str) -> Optional[str]:
+        """Extract caption/subtitle data from HTML"""
+        try:
+            # Look for the player config that contains caption track URLs
+            player_config_pattern = r'ytInitialPlayerResponse\s*=\s*({.+?});'
+            match = re.search(player_config_pattern, html)
+            
+            if match:
+                try:
+                    config_json = match.group(1)
+                    import json
+                    player_data = json.loads(config_json)
+                    
+                    # Navigate to captions data
+                    captions = player_data.get('captions', {})
+                    caption_tracks = captions.get('playerCaptionsTracklistRenderer', {}).get('captionTracks', [])
+                    
+                    # Find English captions (prefer manual over auto-generated)
+                    english_track = None
+                    for track in caption_tracks:
+                        if track.get('languageCode', '').startswith('en'):
+                            if track.get('kind') != 'asr':  # Manual captions
+                                english_track = track
+                                break
+                            elif english_track is None:  # Auto-generated as fallback
+                                english_track = track
+                    
+                    if english_track and 'baseUrl' in english_track:
+                        caption_url = english_track['baseUrl']
+                        caption_text = self._download_caption_file(caption_url)
+                        if caption_text and len(caption_text.strip()) > 100:
+                            return caption_text
+                
+                except json.JSONDecodeError:
+                    print("Failed to parse player config JSON")
+            
+            # Fallback: Look for caption tracks in a simpler pattern
+            caption_url_pattern = r'"baseUrl":"([^"]*transcript[^"]*)"'
+            url_matches = re.findall(caption_url_pattern, html)
+            
+            for url in url_matches:
+                if 'lang=en' in url or '&tlang=en' in url:
+                    clean_url = url.replace('\\u0026', '&').replace('\\/', '/').replace('\\/','/')
+                    caption_text = self._download_caption_file(clean_url)
+                    if caption_text and len(caption_text.strip()) > 100:
+                        return caption_text
+            
+            # Another fallback: look for any transcript-like URLs
+            transcript_patterns = [
+                r'"baseUrl":"([^"]*timedtext[^"]*lang=en[^"]*)"',
+                r'"baseUrl":"([^"]*caption[^"]*)"'
+            ]
+            
+            for pattern in transcript_patterns:
+                url_matches = re.findall(pattern, html)
+                for url in url_matches:
+                    clean_url = url.replace('\\u0026', '&').replace('\\/', '/').replace('\\/','/')
+                    caption_text = self._download_caption_file(clean_url)
+                    if caption_text and len(caption_text.strip()) > 100:
+                        return caption_text
+            
+            return None
+            
+        except Exception as e:
+            print(f"Error extracting caption data: {e}")
+            return None
+
+    def _download_caption_file(self, url: str) -> Optional[str]:
+        """Download and parse caption file from URL"""
+        try:
+            # Decode URL if needed
+            if '\\u' in url:
+                url = url.encode().decode('unicode_escape')
+            
+            response = self.session.get(url, timeout=10)
+            if response.status_code == 200:
+                content = response.text
+                
+                # Parse different caption formats
+                if '<text' in content:  # XML format
+                    return self._parse_xml_captions(content)
+                elif '"text"' in content:  # JSON format
+                    return self._parse_json_captions(content)
+                else:  # Plain text
+                    return self._clean_text(content)
+            
+        except Exception as e:
+            print(f"Error downloading caption file: {e}")
+        
+        return None
+
+    def _parse_xml_captions(self, xml_content: str) -> str:
+        """Parse XML caption format (YouTube's timedtext format)"""
+        # Extract text from <text> tags, handling both simple and complex formats
+        text_patterns = [
+            r'<text[^>]*>([^<]+)</text>',
+            r'<text[^>]*><!\[CDATA\[([^\]]+)\]\]></text>',
+            r'<text[^>]*>([^<]*(?:<[^/][^>]*>[^<]*</[^>]*>[^<]*)*)</text>'
+        ]
+        
+        all_text = []
+        for pattern in text_patterns:
+            matches = re.findall(pattern, xml_content, re.DOTALL)
+            for match in matches:
+                cleaned = self._clean_text(match)
+                if cleaned and len(cleaned) > 2:
+                    all_text.append(cleaned)
+        
+        if all_text:
+            return ' '.join(all_text)
+        
+        # Fallback: extract any text content
+        simple_text = re.sub(r'<[^>]+>', ' ', xml_content)
+        return self._clean_text(simple_text)
+
+    def _parse_json_captions(self, json_content: str) -> str:
+        """Parse JSON caption format"""
+        try:
+            import json
+            data = json.loads(json_content)
+            
+            # Handle YouTube's JSON3 format
+            if 'events' in data:
+                text_parts = []
+                for event in data['events']:
+                    if 'segs' in event:
+                        for seg in event['segs']:
+                            if 'utf8' in seg:
+                                text_parts.append(seg['utf8'])
+                    elif 'dDurationMs' in event and 'segs' not in event:
+                        # Sometimes text is directly in the event
+                        if 'utf8' in event:
+                            text_parts.append(event['utf8'])
+                
+                if text_parts:
+                    return ' '.join([self._clean_text(text) for text in text_parts])
+            
+            # Handle other JSON formats
+            if 'body' in data:
+                text_parts = []
+                for item in data.get('body', []):
+                    if isinstance(item, dict) and 'content' in item:
+                        text_parts.append(item['content'])
+                if text_parts:
+                    return ' '.join([self._clean_text(text) for text in text_parts])
+                    
+        except json.JSONDecodeError:
+            pass
+        
+        # Fallback: regex extraction for any JSON-like text
+        text_patterns = [
+            r'"text"\s*:\s*"([^"]+)"',
+            r'"utf8"\s*:\s*"([^"]+)"',
+            r'"content"\s*:\s*"([^"]+)"'
+        ]
+        
+        all_matches = []
+        for pattern in text_patterns:
+            matches = re.findall(pattern, json_content)
+            all_matches.extend([self._clean_text(text) for text in matches])
+        
+        return ' '.join(all_matches)
+
+    def _parse_vtt_captions(self, vtt_content: str) -> str:
+        """Parse WebVTT caption format"""
+        lines = vtt_content.split('\n')
+        text_lines = []
+        
+        for line in lines:
+            line = line.strip()
+            # Skip VTT headers, timestamps, and empty lines
+            if (not line or 
+                line.startswith('WEBVTT') or 
+                '-->' in line or 
+                line.isdigit() or
+                line.startswith('NOTE')):
+                continue
+            
+            # Clean the text line
+            cleaned = self._clean_text(line)
+            if cleaned and len(cleaned) > 1:
+                text_lines.append(cleaned)
+        
+        return ' '.join(text_lines)
+
+    def _clean_text(self, text: str) -> str:
+        """Clean and normalize text"""
+        if not text:
+            return ""
+        
+        # Decode HTML entities and Unicode escapes
+        text = text.replace('\\n', ' ').replace('\\r', ' ')
+        text = text.replace('\\"', '"').replace("\\'", "'")
+        
+        # Remove HTML tags
+        text = re.sub(r'<[^>]+>', '', text)
+        
+        # Clean up whitespace
+        text = re.sub(r'\s+', ' ', text)
+        
+        return text.strip()
+
+================
+File: database.py
+================
+import sqlite3
+import os
+import hashlib
+import secrets
+from datetime import datetime
+from typing import List, Dict, Optional
+
+class DatabaseManager:
+    def __init__(self, db_path: str = "podcast_transcripts.db"):
+        """Initialize database manager with SQLite database"""
+        self.db_path = db_path
+        self.init_database()
+    
+    def init_database(self):
+        """Initialize database with required tables"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Create episodes table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS episodes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    video_id TEXT UNIQUE NOT NULL,
+                    title TEXT NOT NULL,
+                    date TEXT NOT NULL,
+                    url TEXT NOT NULL,
+                    raw_transcript TEXT NOT NULL,
+                    enhanced_transcript TEXT NOT NULL,
+                    extraction_method TEXT DEFAULT 'caption',
+                    topics TEXT,
+                    key_points TEXT,
+                    summary TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # Create admin table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS admin_users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    email TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    is_active BOOLEAN NOT NULL DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # Add extraction_method column if it doesn't exist (for existing databases)
+            try:
+                cursor.execute("ALTER TABLE episodes ADD COLUMN extraction_method TEXT DEFAULT 'caption'")
+            except sqlite3.OperationalError:
+                # Column already exists
+                pass
+                
+            # Add topics column if it doesn't exist
+            try:
+                cursor.execute("ALTER TABLE episodes ADD COLUMN topics TEXT")
+            except sqlite3.OperationalError:
+                # Column already exists
+                pass
+                
+            # Add key_points column if it doesn't exist
+            try:
+                cursor.execute("ALTER TABLE episodes ADD COLUMN key_points TEXT")
+            except sqlite3.OperationalError:
+                # Column already exists
+                pass
+                
+            # Add summary column if it doesn't exist
+            try:
+                cursor.execute("ALTER TABLE episodes ADD COLUMN summary TEXT")
+            except sqlite3.OperationalError:
+                # Column already exists
+                pass
+            
+            # Create index for better search performance
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_episodes_video_id ON episodes(video_id)
+            """)
+            
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_episodes_date ON episodes(date)
+            """)
+            
+            # Create full-text search index for transcripts
+            cursor.execute("""
+                CREATE VIRTUAL TABLE IF NOT EXISTS episodes_fts USING fts5(
+                    title, enhanced_transcript, topics, summary,
+                    content='episodes',
+                    content_rowid='id'
+                )
+            """)
+            
+            # Create triggers to keep FTS table in sync
+            cursor.execute("""
+                CREATE TRIGGER IF NOT EXISTS episodes_fts_insert AFTER INSERT ON episodes BEGIN
+                    INSERT INTO episodes_fts(rowid, title, enhanced_transcript, topics, summary) 
+                    VALUES (new.id, new.title, new.enhanced_transcript, new.topics, new.summary);
+                END
+            """)
+            
+            cursor.execute("""
+                CREATE TRIGGER IF NOT EXISTS episodes_fts_delete AFTER DELETE ON episodes BEGIN
+                    DELETE FROM episodes_fts WHERE rowid = old.id;
+                END
+            """)
+            
+            cursor.execute("""
+                CREATE TRIGGER IF NOT EXISTS episodes_fts_update AFTER UPDATE ON episodes BEGIN
+                    UPDATE episodes_fts SET title = new.title, enhanced_transcript = new.enhanced_transcript, 
+                    topics = new.topics, summary = new.summary
+                    WHERE rowid = new.id;
+                END
+            """)
+            
+            # Create default admin user if none exists
+            cursor.execute("SELECT COUNT(*) FROM admin_users")
+            if cursor.fetchone()[0] == 0:
+                # Create default admin user: admin@example.com / password123
+                self._create_admin_user("admin@example.com", "password123")
+            
+            conn.commit()
+    
+    def _hash_password(self, password: str) -> str:
+        """Hash a password for storing"""
+        salt = hashlib.sha256(os.urandom(60)).hexdigest().encode('ascii')
+        password_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
+        password_hash = salt + password_hash
+        return password_hash.hex()
+    
+    def _verify_password(self, stored_password_hash: str, provided_password: str) -> bool:
+        """Verify a stored password against a provided password"""
+        stored_password_hash = bytes.fromhex(stored_password_hash)
+        salt = stored_password_hash[:64]
+        stored_hash = stored_password_hash[64:]
+        password_hash = hashlib.pbkdf2_hmac('sha256', provided_password.encode('utf-8'), salt, 100000)
+        return password_hash == stored_hash
+    
+    def _create_admin_user(self, email: str, password: str) -> int:
+        """Create admin user with hashed password"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            password_hash = self._hash_password(password)
+            cursor.execute("""
+                INSERT INTO admin_users (email, password_hash)
+                VALUES (?, ?)
+            """, (email, password_hash))
+            conn.commit()
+            return cursor.lastrowid
+    
+    def authenticate_admin(self, email: str, password: str) -> bool:
+        """Authenticate admin credentials"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT password_hash FROM admin_users
+                WHERE email = ? AND is_active = 1
+            """, (email,))
+            result = cursor.fetchone()
+            if result:
+                return self._verify_password(result[0], password)
+            return False
+    
+    def get_admin_users(self) -> List[Dict]:
+        """Get all admin users"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, email, is_active, created_at FROM admin_users
+            """)
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+    
+    def save_episode(self, episode_data: Dict) -> int:
+        """Save episode data to database"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            extraction_method = episode_data.get('extraction_method', 'caption')
+            topics = episode_data.get('topics', None)
+            key_points = episode_data.get('key_points', None)
+            summary = episode_data.get('summary', None)
+            
+            cursor.execute("""
+                INSERT OR REPLACE INTO episodes 
+                (video_id, title, date, url, raw_transcript, enhanced_transcript, extraction_method, 
+                topics, key_points, summary, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                episode_data['video_id'],
+                episode_data['title'],
+                episode_data['date'],
+                episode_data['url'],
+                episode_data['raw_transcript'],
+                episode_data['enhanced_transcript'],
+                extraction_method,
+                topics,
+                key_points,
+                summary,
+                datetime.now().isoformat()
+            ))
+            
+            episode_id = cursor.lastrowid
+            conn.commit()
+            return episode_id
+    
+    def get_episode_by_video_id(self, video_id: str) -> Optional[Dict]:
+        """Get episode by video ID"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT * FROM episodes WHERE video_id = ?
+            """, (video_id,))
+            
+            row = cursor.fetchone()
+            return dict(row) if row else None
+    
+    def get_all_episodes(self) -> List[Dict]:
+        """Get all episodes ordered by date"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT * FROM episodes ORDER BY date DESC
+            """)
+            
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+    
+    def search_transcripts(self, query: str) -> List[Dict]:
+        """Search transcripts using full-text search"""
+        if not query.strip():
+            return []
+        
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            # First try FTS search
+            try:
+                cursor.execute("""
+                    SELECT episodes.* FROM episodes_fts
+                    JOIN episodes ON episodes.id = episodes_fts.rowid
+                    WHERE episodes_fts MATCH ?
+                    ORDER BY rank, episodes.date DESC
+                """, (query,))
+                
+                rows = cursor.fetchall()
+                if rows:
+                    return [dict(row) for row in rows]
+            except sqlite3.OperationalError:
+                # FTS might not be working, fall back to LIKE search
+                pass
+            
+            # Fallback to LIKE search
+            search_pattern = f"%{query}%"
+            cursor.execute("""
+                SELECT * FROM episodes 
+                WHERE title LIKE ? OR enhanced_transcript LIKE ? OR raw_transcript LIKE ?
+                ORDER BY date DESC
+            """, (search_pattern, search_pattern, search_pattern))
+            
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+    
+    def get_episode_count(self) -> int:
+        """Get total number of episodes"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM episodes")
+            return cursor.fetchone()[0]
+    
+    def delete_episode(self, episode_id: int) -> bool:
+        """Delete episode by ID"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM episodes WHERE id = ?", (episode_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+    
+    def update_episode_transcript(self, episode_id: int, enhanced_transcript: str) -> bool:
+        """Update enhanced transcript for an episode"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE episodes 
+                SET enhanced_transcript = ?, updated_at = ?
+                WHERE id = ?
+            """, (enhanced_transcript, datetime.now().isoformat(), episode_id))
+            conn.commit()
+            return cursor.rowcount > 0
+
+================
+File: pyproject.toml
+================
+[project]
+name = "repl-nix-workspace"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "openai-whisper>=20240930",
+    "openai>=1.82.0",
+    "pandas>=2.2.3",
+    "pydub>=0.25.1",
+    "requests>=2.32.3",
+    "streamlit>=1.45.1",
+    "youtube-transcript-api>=1.0.3",
+    "yt-dlp>=2025.5.22",
+    "google-api-python-client>=2.170.0",
+    "whisper>=1.1.10",
+    "trafilatura>=2.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+================
+File: youtube_handler.py
+================
+import re
+import os
+import tempfile
+from datetime import datetime
+from typing import Optional, Dict
+from youtube_transcript_api import YouTubeTranscriptApi
+import requests
+import yt_dlp
+import whisper
+from pydub import AudioSegment
+from googleapiclient.discovery import build
+from caption_scraper import CaptionScraper
+
+class YouTubeHandler:
+    def __init__(self):
+        """Initialize YouTube handler"""
+        self.whisper_model = None  # Load model only when needed to save memory
+        self.youtube_api = None
+        self.caption_scraper = CaptionScraper()
+        self._init_youtube_api()
+    
+    def _init_youtube_api(self):
+        """Initialize YouTube Data API with authentication"""
+        try:
+            api_key = os.getenv('YOUTUBE_API_KEY')
+            if api_key:
+                self.youtube_api = build('youtube', 'v3', developerKey=api_key)
+                print("YouTube API initialized successfully with authentication")
+            else:
+                print("YouTube API key not found, using fallback methods")
+        except Exception as e:
+            print(f"Failed to initialize YouTube API: {e}")
+    
+    def _get_video_metadata_with_api(self, video_id: str) -> Dict:
+        """Get video metadata using authenticated YouTube Data API"""
+        try:
+            if self.youtube_api:
+                request = self.youtube_api.videos().list(
+                    part="snippet,contentDetails",
+                    id=video_id
+                )
+                response = request.execute()
+                
+                if response['items']:
+                    video = response['items'][0]
+                    snippet = video['snippet']
+                    
+                    # Parse duration if available
+                    duration = None
+                    if 'contentDetails' in video and 'duration' in video['contentDetails']:
+                        duration_str = video['contentDetails']['duration']
+                        # Convert ISO 8601 duration to seconds (PT1H2M3S format)
+                        match = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', duration_str)
+                        if match:
+                            hours, minutes, seconds = match.groups()
+                            duration = (int(hours or 0) * 3600 + 
+                                      int(minutes or 0) * 60 + 
+                                      int(seconds or 0))
+                    
+                    # Parse upload date
+                    upload_date = snippet.get('publishedAt', '')
+                    try:
+                        date_obj = datetime.fromisoformat(upload_date.replace('Z', '+00:00'))
+                        formatted_date = date_obj.strftime('%Y-%m-%d')
+                    except:
+                        formatted_date = datetime.now().strftime('%Y-%m-%d')
+                    
+                    return {
+                        'title': self._clean_title(snippet.get('title', f'Video {video_id}')),
+                        'date': formatted_date,
+                        'channel': snippet.get('channelTitle', 'Unknown Channel'),
+                        'duration': duration
+                    }
+        except Exception as e:
+            print(f"API metadata extraction failed: {e}")
+        
+        # Fallback metadata
+        return {
+            'title': f"Coffee with Scott Adams - Episode {video_id}",
+            'date': datetime.now().strftime('%Y-%m-%d'),
+            'channel': "Scott Adams",
+            'duration': None
+        }
+    
+    def extract_video_id(self, url: str) -> Optional[str]:
+        """Extract video ID from various YouTube URL formats"""
+        patterns = [
+            r'(?:https?://)?(?:www\.)?youtube\.com/watch\?v=([a-zA-Z0-9_-]+)',
+            r'(?:https?://)?(?:www\.)?youtu\.be/([a-zA-Z0-9_-]+)',
+            r'(?:https?://)?(?:www\.)?youtube\.com/embed/([a-zA-Z0-9_-]+)',
+            r'(?:https?://)?(?:www\.)?youtube\.com/v/([a-zA-Z0-9_-]+)'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, url)
+            if match:
+                return match.group(1)
+        return None
+    
+    def extract_transcript(self, video_id: str) -> Optional[Dict]:
+        """
+        Extract transcript and metadata from YouTube video
+        Returns dict with transcript, title, date, and other metadata
+        """
+        try:
+            # Get transcript using youtube-transcript-api
+            transcript_list = YouTubeTranscriptApi.get_transcript(
+                video_id,
+                languages=['en', 'en-US', 'en-GB']  # Prefer English transcripts
+            )
+            
+            # Combine transcript segments into full text
+            full_transcript = self._combine_transcript_segments(transcript_list)
+            
+            if not full_transcript or len(full_transcript.strip()) < 50:
+                raise ValueError("Transcript is too short or empty")
+            
+            # Get video metadata
+            metadata = self._get_video_metadata(video_id)
+            
+            return {
+                'transcript': full_transcript,
+                'title': metadata.get('title', f'Video {video_id}'),
+                'date': metadata.get('date', datetime.now().strftime('%Y-%m-%d')),
+                'duration': metadata.get('duration'),
+                'channel': metadata.get('channel'),
+                'video_id': video_id
+            }
+            
+        except Exception as e:
+            error_msg = str(e)
+            print(f"Error extracting transcript for video {video_id}: {error_msg}")
+            
+            # Check for specific YouTube blocking errors and try web scraping fallback
+            if "IP belonging to a cloud provider" in error_msg or "blocked" in error_msg.lower():
+                print("API blocked, trying web scraping method...")
+                try:
+                    return self.caption_scraper.extract_captions_from_page(video_id)
+                except Exception as scrape_error:
+                    print(f"Web scraping also failed: {scrape_error}")
+                    raise Exception("Both API and web scraping methods failed. Try the Audio-Based extraction method.")
+            else:
+                raise Exception(f"Caption extraction failed: {error_msg}")
+            
+            return None
+
+    def extract_transcript_from_audio(self, video_id: str, progress_callback=None, quality_level="Fast") -> Optional[Dict]:
+        """
+        Extract transcript from YouTube video audio using Whisper AI
+        This method downloads audio and uses speech recognition for transcription
+        """
+        temp_dir = None
+        try:
+            # Create temporary directory for audio files
+            temp_dir = tempfile.mkdtemp()
+            audio_path = os.path.join(temp_dir, f"{video_id}.wav")
+            
+            if progress_callback:
+                progress_callback("Downloading audio from YouTube...")
+            
+            # Download audio using yt-dlp with optimized settings and bot bypass
+            ydl_opts = {
+                'format': 'worstaudio/worst',  # Use lower quality for faster processing
+                'outtmpl': os.path.join(temp_dir, f"{video_id}.%(ext)s"),
+                'extractaudio': True,
+                'audioformat': 'mp3',  # MP3 is smaller and faster to process
+                'audioquality': '9',   # Lower quality for speed
+                'quiet': True,
+                'no_warnings': True,
+                # Add headers to appear more like a regular browser
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'en-us,en;q=0.5',
+                    'Accept-Encoding': 'gzip,deflate',
+                    'Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.7',
+                    'Keep-Alive': '300',
+                    'Connection': 'keep-alive',
+                },
+                # Try to bypass age restrictions
+                'age_limit': None,
+                'skip_download': False,
+            }
+            
+            url = f"https://www.youtube.com/watch?v={video_id}"
+            
+            # Get enhanced metadata using API if available
+            api_metadata = self._get_video_metadata_with_api(video_id)
+            
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                # Extract video info first
+                info = ydl.extract_info(url, download=False)
+                
+                # Use API metadata if available, fallback to yt-dlp
+                title = api_metadata.get('title') or info.get('title', f'Video {video_id}')
+                duration = api_metadata.get('duration') or info.get('duration')
+                upload_date = api_metadata.get('date') or info.get('upload_date')
+                channel = api_metadata.get('channel') or info.get('uploader')
+                
+                # Format date
+                if upload_date:
+                    try:
+                        date_obj = datetime.strptime(upload_date, '%Y%m%d')
+                        formatted_date = date_obj.strftime('%Y-%m-%d')
+                    except:
+                        formatted_date = datetime.now().strftime('%Y-%m-%d')
+                else:
+                    formatted_date = datetime.now().strftime('%Y-%m-%d')
+                
+                # Download audio
+                ydl.download([url])
+            
+            # Find the downloaded audio file
+            downloaded_files = [f for f in os.listdir(temp_dir) if f.startswith(video_id)]
+            if not downloaded_files:
+                raise Exception("Failed to download audio file")
+            
+            audio_file = os.path.join(temp_dir, downloaded_files[0])
+            
+            if progress_callback:
+                progress_callback("Converting audio format...")
+            
+            # Convert and compress audio for faster processing
+            audio = AudioSegment.from_file(audio_file)
+            
+            # Compress audio: reduce sample rate and convert to mono for speed
+            audio = audio.set_frame_rate(16000)  # Lower sample rate for faster processing
+            audio = audio.set_channels(1)       # Convert to mono
+            
+            # Export as WAV for Whisper
+            audio_path = os.path.join(temp_dir, f"{video_id}_compressed.wav")
+            audio.export(audio_path, format="wav")
+            
+            if progress_callback:
+                progress_callback("Loading speech recognition model...")
+            
+            # Load Whisper model based on quality level
+            model_map = {
+                "Fast": "tiny",
+                "Balanced": "base", 
+                "Best Quality": "small"
+            }
+            
+            model_size = model_map.get(quality_level, "tiny")
+            
+            if self.whisper_model is None or getattr(self, '_current_model_size', None) != model_size:
+                if progress_callback:
+                    progress_callback(f"Loading {model_size} speech recognition model...")
+                self.whisper_model = whisper.load_model(model_size)
+                self._current_model_size = model_size
+            
+            if progress_callback:
+                progress_callback("Transcribing audio... This may take a few minutes.")
+            
+            # Transcribe audio with optimized settings
+            result = self.whisper_model.transcribe(
+                audio_path,
+                fp16=False,  # Use FP32 for CPU compatibility
+                verbose=False,  # Reduce output
+                language="en",  # Assume English for Scott Adams podcasts
+                temperature=0.0,  # More consistent results
+                compression_ratio_threshold=2.4,  # Prevent cutting off content
+                logprob_threshold=-1.0,  # Include more uncertain words
+                no_speech_threshold=0.6  # Better handling of quiet sections
+            )
+            transcript_text = result["text"]
+            
+            if not transcript_text or len(transcript_text.strip()) < 50:
+                raise ValueError("Generated transcript is too short or empty")
+            
+            # Clean up the transcript
+            cleaned_transcript = self._clean_whisper_transcript(transcript_text)
+            
+            return {
+                'transcript': cleaned_transcript,
+                'title': self._clean_title(title),
+                'date': formatted_date,
+                'duration': duration,
+                'channel': channel,
+                'video_id': video_id,
+                'extraction_method': 'audio'  # Mark this as audio-extracted
+            }
+            
+        except Exception as e:
+            error_msg = str(e)
+            print(f"Error extracting transcript from audio for video {video_id}: {error_msg}")
+            
+            # Check for specific YouTube blocking errors
+            if "Sign in to confirm you're not a bot" in error_msg:
+                raise Exception("YouTube is blocking audio downloads from this environment. This is common on cloud platforms. Try using the Caption-Based extraction method instead, which often works better.")
+            elif "blocked" in error_msg.lower() or "forbidden" in error_msg.lower():
+                raise Exception("YouTube has blocked access to this video's audio. Try using the Caption-Based extraction method instead.")
+            else:
+                raise Exception(f"Audio extraction failed: {error_msg}")
+            
+            return None
+        finally:
+            # Clean up temporary files
+            if temp_dir and os.path.exists(temp_dir):
+                import shutil
+                try:
+                    shutil.rmtree(temp_dir)
+                except:
+                    pass  # Best effort cleanup
+    
+    def _combine_transcript_segments(self, transcript_list: list) -> str:
+        """Combine transcript segments into readable text"""
+        if not transcript_list:
+            return ""
+        
+        # Extract text from each segment
+        text_segments = []
+        for segment in transcript_list:
+            text = segment.get('text', '').strip()
+            if text:
+                # Clean up common transcript artifacts
+                text = self._clean_transcript_text(text)
+                text_segments.append(text)
+        
+        # Join segments with spaces
+        full_text = ' '.join(text_segments)
+        
+        # Basic formatting cleanup
+        full_text = re.sub(r'\s+', ' ', full_text)  # Multiple spaces to single space
+        full_text = re.sub(r'([.!?])\s*([A-Z])', r'\1 \2', full_text)  # Ensure space after punctuation
+        
+        return full_text.strip()
+    
+    def _clean_transcript_text(self, text: str) -> str:
+        """Clean individual transcript text segments"""
+        # Remove common transcript artifacts
+        text = re.sub(r'\[.*?\]', '', text)  # Remove bracketed content
+        text = re.sub(r'\(.*?\)', '', text)  # Remove parenthetical content
+        
+        # Fix common transcription issues
+        text = re.sub(r'\buh\b', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\bum\b', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\ber\b', '', text, flags=re.IGNORECASE)
+        
+        # Clean up whitespace
+        text = re.sub(r'\s+', ' ', text)
+        
+        return text.strip()
+    
+    def _get_video_metadata(self, video_id: str) -> Dict:
+        """
+        Get video metadata from YouTube
+        This is a simplified approach - in production you might want to use YouTube Data API
+        """
+        try:
+            # Try to extract basic info from YouTube page
+            url = f"https://www.youtube.com/watch?v={video_id}"
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            
+            response = requests.get(url, headers=headers, timeout=10)
+            if response.status_code == 200:
+                html = response.text
+                
+                # Extract title
+                title_match = re.search(r'"title":"([^"]+)"', html)
+                title = title_match.group(1) if title_match else f"Video {video_id}"
+                
+                # Clean up title (decode unicode escapes)
+                title = title.encode().decode('unicode_escape')
+                
+                # Extract upload date (simplified approach)
+                date_match = re.search(r'"uploadDate":"([^"]+)"', html)
+                if date_match:
+                    upload_date = date_match.group(1)
+                    try:
+                        # Parse ISO date format
+                        date_obj = datetime.fromisoformat(upload_date.replace('Z', '+00:00'))
+                        date = date_obj.strftime('%Y-%m-%d')
+                    except:
+                        date = datetime.now().strftime('%Y-%m-%d')
+                else:
+                    date = datetime.now().strftime('%Y-%m-%d')
+                
+                # Extract channel name
+                channel_match = re.search(r'"author":"([^"]+)"', html)
+                channel = channel_match.group(1) if channel_match else "Unknown Channel"
+                
+                return {
+                    'title': self._clean_title(title),
+                    'date': date,
+                    'channel': channel,
+                    'duration': None  # Would need YouTube Data API for accurate duration
+                }
+                
+        except Exception as e:
+            print(f"Warning: Could not extract metadata for video {video_id}: {str(e)}")
+        
+        # Fallback metadata
+        return {
+            'title': f"Coffee with Scott Adams - Episode {video_id}",
+            'date': datetime.now().strftime('%Y-%m-%d'),
+            'channel': "Scott Adams",
+            'duration': None
+        }
+    
+    def _clean_title(self, title: str) -> str:
+        """Clean up video title"""
+        # Remove common unwanted characters
+        title = re.sub(r'[^\w\s\-\:\.\,\!\?]', '', title)
+        
+        # Limit length
+        if len(title) > 200:
+            title = title[:200] + "..."
+        
+        return title.strip()
+    
+    def validate_coffee_with_scott_adams(self, video_id: str) -> bool:
+        """
+        Validate if the video is likely a Coffee with Scott Adams episode
+        This is a basic check - you might want to enhance this
+        """
+        try:
+            metadata = self._get_video_metadata(video_id)
+            title = metadata.get('title', '').lower()
+            channel = metadata.get('channel', '').lower()
+            
+            # Check for Scott Adams related keywords
+            scott_keywords = ['scott adams', 'coffee with scott', 'real coffee']
+            
+            return any(keyword in title or keyword in channel for keyword in scott_keywords)
+            
+        except Exception as e:
+            print(f"Warning: Could not validate video {video_id}: {str(e)}")
+            return True  # Default to allowing the video
+    
+    def get_available_transcript_languages(self, video_id: str) -> list:
+        """Get list of available transcript languages for a video"""
+        try:
+            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+            languages = []
+            
+            for transcript in transcript_list:
+                languages.append({
+                    'language': transcript.language,
+                    'language_code': transcript.language_code,
+                    'is_generated': transcript.is_generated,
+                    'is_translatable': transcript.is_translatable
+                })
+            
+            return languages
+            
+        except Exception as e:
+            print(f"Error getting transcript languages for {video_id}: {str(e)}")
+            return []
+
+    def _clean_whisper_transcript(self, text: str) -> str:
+        """Clean Whisper-generated transcript text"""
+        # Remove excessive whitespace
+        text = re.sub(r'\s+', ' ', text)
+        
+        # Whisper sometimes adds timestamps or markers, remove them
+        text = re.sub(r'\[\d+:\d+:\d+\.\d+\s*-->\s*\d+:\d+:\d+\.\d+\]', '', text)
+        text = re.sub(r'\d+:\d+\.\d+', '', text)
+        
+        # Clean up common speech recognition artifacts
+        text = re.sub(r'\[MUSIC\]', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\[APPLAUSE\]', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\[LAUGHTER\]', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\[INAUDIBLE\]', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\[UNCLEAR\]', '', text, flags=re.IGNORECASE)
+        
+        # Remove common filler words that speech recognition might capture
+        text = re.sub(r'\b(uh|um|er|ah)\b', '', text, flags=re.IGNORECASE)
+        
+        # Ensure proper sentence spacing
+        text = re.sub(r'([.!?])\s*([A-Z])', r'\1 \2', text)
+        
+        # Remove multiple spaces
+        text = re.sub(r'\s+', ' ', text)
+        
+        return text.strip()
+
+    def extract_transcript_with_api(self, video_id: str) -> Optional[Dict]:
+        """
+        Extract transcript using authenticated YouTube Data API
+        This bypasses IP blocking by using official API access
+        """
+        try:
+            if not self.youtube_api:
+                raise Exception("YouTube API not initialized. API key required.")
+            
+            # Get video metadata first
+            metadata = self._get_video_metadata_with_api(video_id)
+            
+            # Get list of available captions
+            captions_request = self.youtube_api.captions().list(
+                part="snippet",
+                videoId=video_id
+            )
+            captions_response = captions_request.execute()
+            
+            if not captions_response.get('items'):
+                raise Exception("No captions available for this video")
+            
+            # Find English captions (prefer manually created over auto-generated)
+            english_caption = None
+            for caption in captions_response['items']:
+                lang = caption['snippet']['language']
+                track_kind = caption['snippet'].get('trackKind', 'standard')
+                
+                if lang in ['en', 'en-US', 'en-GB']:
+                    if track_kind == 'standard':  # Manually created captions
+                        english_caption = caption
+                        break
+                    elif english_caption is None:  # Auto-generated as fallback
+                        english_caption = caption
+            
+            if not english_caption:
+                raise Exception("No English captions found for this video")
+            
+            # Download the caption content
+            caption_id = english_caption['id']
+            download_request = self.youtube_api.captions().download(
+                id=caption_id,
+                tfmt='srt'  # SubRip format
+            )
+            
+            # Execute the download
+            caption_content = download_request.execute()
+            
+            if isinstance(caption_content, bytes):
+                caption_content = caption_content.decode('utf-8')
+            
+            # Parse SRT content to extract text
+            transcript_text = self._parse_srt_content(caption_content)
+            
+            if not transcript_text or len(transcript_text.strip()) < 50:
+                raise Exception("Generated transcript is too short or empty")
+            
+            return {
+                'transcript': transcript_text,
+                'title': metadata.get('title', f'Video {video_id}'),
+                'date': metadata.get('date', datetime.now().strftime('%Y-%m-%d')),
+                'duration': metadata.get('duration'),
+                'channel': metadata.get('channel'),
+                'video_id': video_id,
+                'extraction_method': 'api_captions'
+            }
+            
+        except Exception as e:
+            print(f"Error extracting transcript with API for video {video_id}: {str(e)}")
+            raise Exception(f"API caption extraction failed: {str(e)}")
+    
+    def _parse_srt_content(self, srt_content: str) -> str:
+        """Parse SRT subtitle content to extract plain text"""
+        import re
+        
+        lines = srt_content.split('\n')
+        text_lines = []
+        
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+            
+            # Skip sequence numbers and timestamp lines
+            if line.isdigit() or '-->' in line or not line:
+                i += 1
+                continue
+            
+            # Clean subtitle text
+            cleaned_line = re.sub(r'<[^>]+>', '', line)  # Remove HTML tags
+            cleaned_line = re.sub(r'\[.*?\]', '', cleaned_line)  # Remove bracketed content
+            cleaned_line = cleaned_line.strip()
+            
+            if cleaned_line:
+                text_lines.append(cleaned_line)
+            
+            i += 1
+        
+        # Join and clean up text
+        full_text = ' '.join(text_lines)
+        full_text = re.sub(r'\s+', ' ', full_text)
+        full_text = re.sub(r'([.!?])\s*([A-Z])', r'\1 \2', full_text)
+        
+        return full_text.strip()
+
+    def extract_transcript_web_scraping(self, video_id: str) -> Optional[Dict]:
+        """
+        Extract transcript using web scraping - bypasses all API restrictions
+        This method directly scrapes YouTube's web page for caption data
+        """
+        try:
+            return self.caption_scraper.extract_captions_from_page(video_id)
+        except Exception as e:
+            print(f"Error with web scraping extraction for video {video_id}: {str(e)}")
+            raise Exception(f"Web scraping extraction failed: {str(e)}")
+
+================
+File: app.py
+================
+import streamlit as st
+import pandas as pd
+import re
+import csv
+import io
+import sqlite3
+from datetime import datetime
+from database import DatabaseManager
+from youtube_handler import YouTubeHandler
+from transcript_processor import TranscriptProcessor
+
+# Initialize components
+@st.cache_resource
+def initialize_components():
+    # Get OpenAI API key
+    import os
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    
+    db = DatabaseManager()
+    youtube_handler = YouTubeHandler()
+    transcript_processor = TranscriptProcessor(api_key=openai_api_key)
+    return db, youtube_handler, transcript_processor
+
+def validate_youtube_url(url):
+    """Validate if the provided URL is a valid YouTube URL"""
+    youtube_patterns = [
+        r'(?:https?://)?(?:www\.)?youtube\.com/watch\?v=([a-zA-Z0-9_-]+)',
+        r'(?:https?://)?(?:www\.)?youtu\.be/([a-zA-Z0-9_-]+)',
+        r'(?:https?://)?(?:www\.)?youtube\.com/embed/([a-zA-Z0-9_-]+)'
+    ]
+    
+    for pattern in youtube_patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    return None
+
+def highlight_search_terms(text, search_query):
+    """Highlight search terms in text with HTML styling while preserving all text"""
+    if not search_query or not text:
+        return text
+    
+    # Split search query into individual terms
+    search_terms = [term.strip() for term in search_query.split() if term.strip()]
+    
+    highlighted_text = text
+    
+    # Create different colors for different search terms
+    colors = ['#ffeb3b', '#ff9800', '#4caf50', '#2196f3', '#9c27b0', '#f44336']
+    
+    for i, term in enumerate(search_terms):
+        if term:
+            color = colors[i % len(colors)]
+            # Use HTML highlighting with background color - preserve the original case
+            pattern = re.compile(f'({re.escape(term)})', re.IGNORECASE)
+            highlighted_text = pattern.sub(
+                lambda m: f'<span style="background-color: {color}; padding: 2px 4px; border-radius: 3px; font-weight: bold; color: #000;">{m.group(1)}</span>',
+                highlighted_text
+            )
+    
+    return highlighted_text
+
+def extract_context_snippets(text, search_query, context_length=150):
+    """Extract context snippets around search terms"""
+    if not search_query or not text:
+        return []
+    
+    search_terms = [term.strip().lower() for term in search_query.split() if term.strip()]
+    snippets = []
+    
+    for term in search_terms:
+        # Find all occurrences of the term
+        pattern = re.compile(re.escape(term), re.IGNORECASE)
+        matches = list(pattern.finditer(text))
+        
+        for match in matches:
+            start_pos = max(0, match.start() - context_length)
+            end_pos = min(len(text), match.end() + context_length)
+            
+            # Extract context around the match
+            context = text[start_pos:end_pos]
+            
+            # Clean up the snippet
+            if start_pos > 0:
+                context = "..." + context
+            if end_pos < len(text):
+                context = context + "..."
+            
+            # Highlight the search term in the snippet
+            highlighted_context = highlight_search_terms(context, term)
+            
+            if highlighted_context not in snippets:
+                snippets.append(highlighted_context)
+    
+    return snippets[:5]  # Return top 5 unique snippets
+
+def process_youtube_episode(youtube_url, extraction_method, quality_level, 
+                           db, youtube_handler, transcript_processor, progress_placeholder=None):
+    """Process a single YouTube URL and return the result"""
+    result = {
+        "success": False,
+        "message": "",
+        "video_id": None,
+        "title": None,
+        "error": None
+    }
+    
+    video_id = validate_youtube_url(youtube_url)
+    if not video_id:
+        result["message"] = "Invalid YouTube URL"
+        result["error"] = "Please enter a valid YouTube URL."
+        return result
+    
+    # Set video_id in result
+    result["video_id"] = video_id
+    
+    # Check if episode already exists
+    existing_episode = db.get_episode_by_video_id(video_id)
+    if existing_episode:
+        result["message"] = "Episode already exists"
+        result["title"] = existing_episode['title']
+        result["error"] = f"This episode has already been processed: {existing_episode['title']}"
+        return result
+    
+    # Choose extraction method based on user selection
+    transcript_data = None
+    extraction_error = None
+    
+    try:
+        if "Caption-Based" in extraction_method:
+            if progress_placeholder:
+                progress_placeholder.info(f"📝 Extracting transcript from YouTube captions for video {video_id}...")
+            
+            transcript_data = youtube_handler.extract_transcript(video_id)
+            if not transcript_data:
+                extraction_error = "Could not extract transcript from captions."
+        
+        elif "Web Scraping" in extraction_method:
+            if progress_placeholder:
+                progress_placeholder.info(f"🌐 Extracting transcript using web scraping for video {video_id}...")
+            
+            transcript_data = youtube_handler.extract_transcript_web_scraping(video_id)
+            if not transcript_data:
+                extraction_error = "Could not extract transcript using web scraping."
+        
+        else:  # Audio-based
+            def audio_progress_callback(message):
+                if progress_placeholder:
+                    progress_placeholder.info(f"🎵 {message} (Video ID: {video_id})")
+            
+            if progress_placeholder:
+                progress_placeholder.info(f"🎤 Extracting transcript from audio for video {video_id}... This may take several minutes.")
+            
+            transcript_data = youtube_handler.extract_transcript_from_audio(
+                video_id, 
+                progress_callback=audio_progress_callback,
+                quality_level=quality_level.split(" (")[0]  # Extract just "Fast", "Balanced", or "Best Quality"
+            )
+            if not transcript_data:
+                extraction_error = "Could not extract transcript from audio."
+        
+        if extraction_error:
+            result["message"] = "Extraction failed"
+            result["error"] = extraction_error
+            return result
+        
+        # Process transcript with AI
+        if progress_placeholder:
+            progress_placeholder.info(f"🧠 Enhancing transcript with AI for video {video_id}...")
+        
+        enhanced_transcript = transcript_processor.enhance_transcript(
+            transcript_data['transcript']
+        )
+        
+        # Extract topics and generate summary
+        if progress_placeholder:
+            progress_placeholder.info(f"📊 Extracting topics and generating summary for video {video_id}...")
+        
+        # Extract key topics (which includes topics, key points, and a summary)
+        topics_data = transcript_processor.extract_key_topics(enhanced_transcript)
+        
+        # Generate a more detailed summary if needed
+        detailed_summary = transcript_processor.generate_summary(enhanced_transcript)
+        
+        # Convert topics and key_points lists to strings for storage
+        topics_str = None
+        key_points_str = None
+        summary = None
+        
+        if isinstance(topics_data, dict):
+            import json
+            if 'topics' in topics_data and topics_data['topics']:
+                topics_str = json.dumps(topics_data['topics'])
+            if 'key_points' in topics_data and topics_data['key_points']:
+                key_points_str = json.dumps(topics_data['key_points'])
+            if 'summary' in topics_data and topics_data['summary']:
+                summary = topics_data['summary']
+        
+        # If the topic extraction didn't provide a summary, use the detailed one
+        if not summary:
+            summary = detailed_summary
+        
+        # Save to database
+        if progress_placeholder:
+            progress_placeholder.info(f"💾 Saving to database for video {video_id}...")
+        
+        episode_data = {
+            'video_id': video_id,
+            'title': transcript_data['title'],
+            'date': transcript_data['date'],
+            'url': youtube_url,
+            'raw_transcript': transcript_data['transcript'],
+            'enhanced_transcript': enhanced_transcript,
+            'extraction_method': transcript_data.get('extraction_method', 'caption'),
+            'topics': topics_str,
+            'key_points': key_points_str,
+            'summary': summary
+        }
+        
+        db.save_episode(episode_data)
+        
+        result["success"] = True
+        result["message"] = "Processing completed successfully"
+        result["title"] = transcript_data['title']
+        
+    except Exception as e:
+        result["message"] = "Processing failed"
+        result["error"] = str(e)
+    
+    return result
+
+def main():
+    st.title("CWSA Transcript Extractor & Search")
+    st.markdown("Created by Gadsdencode")
+    st.markdown("---")
+    
+    # Check for OpenAI API key
+    import os
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    
+    # Only show warning if API key is truly missing (not when using our hardcoded default)
+    if not openai_api_key or openai_api_key == "your-openai-api-key-here":
+        st.warning("""
+        ⚠️ **OpenAI API Key Not Configured**
+        
+        Some features like transcript enhancement, topic extraction, and summary generation require an OpenAI API key.
+        
+        To fix this:
+        1. Get an API key from [OpenAI Platform](https://platform.openai.com/api-keys)
+        2. Set it as an environment variable named `OPENAI_API_KEY`
+        
+        Without this key, topic extraction and summary generation will fail.
+        """)
+    
+    # Initialize components
+    db, youtube_handler, transcript_processor = initialize_components()
+    
+    # Sidebar for navigation
+    st.sidebar.title("Navigation")
+    page = st.sidebar.selectbox("Choose a page", ["Add Episode", "Browse Episodes", "Search Transcripts", "Database Management"])
+    
+    if page == "Add Episode":
+        st.header("Add New Episode(s)")
+        
+        # Create tabs for single vs batch processing
+        single_tab, batch_tab = st.tabs(["Single Episode", "Batch Episodes"])
+        
+        with single_tab:
+            # URL Input
+            youtube_url = st.text_input(
+                "Enter YouTube URL for Coffee with Scott Adams episode:",
+                placeholder="https://www.youtube.com/watch?v=...",
+                key="single_url_input"
+            )
+            
+            # Extraction method selection
+            st.subheader("Choose Transcript Extraction Method")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.markdown("**📝 Caption-Based**")
+                st.markdown("• Fast API extraction")
+                st.markdown("• May be blocked")
+                
+            with col2:
+                st.markdown("**🌐 Web Scraping**")
+                st.markdown("• Bypasses all blocks")
+                st.markdown("• Always works")
+                st.markdown("• Most reliable")
+                
+            with col3:
+                st.markdown("**🎤 Audio-Based**")
+                st.markdown("• Speech recognition")
+                st.markdown("• No captions needed")
+                st.markdown("• Takes 2-5 minutes")
+            
+            extraction_method = st.radio(
+                "Select extraction method:",
+                ["Caption-Based (Fast)", "Web Scraping (Bypasses Blocks)", "Audio-Based (No Captions Needed)"],
+                horizontal=True,
+                key="single_extraction_method"
+            )
+            
+            # Show quality options for audio-based extraction
+            quality_level = "Fast"  # Default value
+            if "Audio-Based" in extraction_method:
+                st.info("💡 **Tip:** Audio extraction takes longer but works when captions aren't available. Processing time: 2-5 minutes for typical episodes.")
+                
+                quality_level = st.selectbox(
+                    "Choose processing speed:",
+                    ["Fast (tiny model)", "Balanced (base model)", "Best Quality (small model)"],
+                    index=0,
+                    help="Fast: ~2 min, Balanced: ~4 min, Best: ~6 min for typical episodes",
+                    key="single_quality_level"
+                )
+            
+            if st.button("Extract and Process Transcript", disabled=not youtube_url, key="single_process_button"):
+                progress_placeholder = st.empty()
+                result = process_youtube_episode(
+                    youtube_url, 
+                    extraction_method, 
+                    quality_level,
+                    db, 
+                    youtube_handler, 
+                    transcript_processor,
+                    progress_placeholder
+                )
+                
+                progress_placeholder.empty()
+                
+                if result["success"]:
+                    st.success("Episode processed and saved successfully!")
+                    st.info(f"Episode Title: {result['title']}")
+                else:
+                    st.error(f"Error: {result['error']}")
+        
+        with batch_tab:
+            st.subheader("Batch Episode Processing")
+            st.markdown("""
+            Add multiple episodes at once by providing a list of YouTube URLs. 
+            Each URL will be processed sequentially.
+            """)
+            
+            # Offer two input methods: manual input and file upload
+            input_method = st.radio(
+                "Choose input method:",
+                ["Enter URLs manually", "Upload a file (CSV or TXT)"],
+                key="batch_input_method"
+            )
+            
+            urls_to_process = []
+            
+            if input_method == "Enter URLs manually":
+                urls_text = st.text_area(
+                    "Enter YouTube URLs (one per line):",
+                    placeholder="https://www.youtube.com/watch?v=...\nhttps://youtu.be/...",
+                    height=150,
+                    key="batch_urls_text"
+                )
+                
+                if urls_text:
+                    # Split by newline and filter out empty lines
+                    urls_to_process = [url.strip() for url in urls_text.split('\n') if url.strip()]
+                    st.info(f"Found {len(urls_to_process)} URL(s) to process")
+            else:
+                uploaded_file = st.file_uploader("Upload a file with YouTube URLs", type=["txt", "csv"])
+                
+                if uploaded_file is not None:
+                    try:
+                        # Determine file type and parse accordingly
+                        if uploaded_file.name.endswith('.csv'):
+                            df = pd.read_csv(uploaded_file)
+                            # Look for a column that might contain URLs
+                            url_column = None
+                            for col in df.columns:
+                                if ('url' in col.lower()) or ('link' in col.lower()):
+                                    url_column = col
+                                    break
+                            
+                            if url_column:
+                                urls_to_process = df[url_column].dropna().tolist()
+                            else:
+                                # Assume the first column contains URLs
+                                urls_to_process = df.iloc[:, 0].dropna().tolist()
+                        else:
+                            # Assume TXT file with one URL per line
+                            content = uploaded_file.getvalue().decode("utf-8")
+                            urls_to_process = [url.strip() for url in content.split('\n') if url.strip()]
+                        
+                        st.info(f"Found {len(urls_to_process)} URL(s) to process from the uploaded file")
+                    except Exception as e:
+                        st.error(f"Error parsing file: {str(e)}")
+            
+            # Extraction method selection (same as single mode but with different keys)
+            st.subheader("Choose Transcript Extraction Method")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.markdown("**📝 Caption-Based**")
+                st.markdown("• Fast API extraction")
+                st.markdown("• May be blocked")
+                
+            with col2:
+                st.markdown("**🌐 Web Scraping**")
+                st.markdown("• Bypasses all blocks")
+                st.markdown("• Always works")
+                st.markdown("• Most reliable")
+                
+            with col3:
+                st.markdown("**🎤 Audio-Based**")
+                st.markdown("• Speech recognition")
+                st.markdown("• No captions needed")
+                st.markdown("• Takes 2-5 minutes")
+            
+            batch_extraction_method = st.radio(
+                "Select extraction method for all URLs:",
+                ["Caption-Based (Fast)", "Web Scraping (Bypasses Blocks)", "Audio-Based (No Captions Needed)"],
+                horizontal=True,
+                key="batch_extraction_method"
+            )
+            
+            # Show quality options for audio-based extraction
+            batch_quality_level = "Fast"  # Default value
+            if "Audio-Based" in batch_extraction_method:
+                st.info("💡 **Tip:** Audio extraction takes longer but works when captions aren't available. For batch processing, the Fast option is recommended.")
+                
+                batch_quality_level = st.selectbox(
+                    "Choose processing speed:",
+                    ["Fast (tiny model)", "Balanced (base model)", "Best Quality (small model)"],
+                    index=0,
+                    help="Fast: ~2 min, Balanced: ~4 min, Best: ~6 min per episode",
+                    key="batch_quality_level"
+                )
+            
+            # Skip duplicate option
+            skip_existing = st.checkbox(
+                "Skip episodes that already exist in the database", 
+                value=True,
+                key="skip_existing"
+            )
+            
+            # Process button
+            if st.button("Process All URLs", disabled=len(urls_to_process) == 0, key="batch_process_button"):
+                if len(urls_to_process) > 0:
+                    st.subheader("Processing Results")
+                    
+                    # Create placeholders for results
+                    progress_bar = st.progress(0)
+                    status_placeholder = st.empty()
+                    results_placeholder = st.empty()
+                    
+                    # Initialize results tracking
+                    total_urls = len(urls_to_process)
+                    results = {
+                        "success": 0,
+                        "skipped": 0,
+                        "failed": 0,
+                        "details": []
+                    }
+                    
+                    # Process each URL
+                    for i, url in enumerate(urls_to_process):
+                        # Update progress
+                        progress_percent = (i / total_urls)
+                        progress_bar.progress(progress_percent)
+                        status_placeholder.info(f"Processing URL {i+1} of {total_urls}: {url}")
+                        
+                        # Process the URL
+                        result = process_youtube_episode(
+                            url,
+                            batch_extraction_method,
+                            batch_quality_level,
+                            db,
+                            youtube_handler,
+                            transcript_processor,
+                            status_placeholder
+                        )
+                        
+                        # Track result
+                        if result["success"]:
+                            results["success"] += 1
+                            results["details"].append({
+                                "url": url,
+                                "status": "✅ Success",
+                                "title": result["title"],
+                                "message": "Processed successfully"
+                            })
+                        elif "already exists" in result.get("message", "").lower() and skip_existing:
+                            results["skipped"] += 1
+                            results["details"].append({
+                                "url": url,
+                                "status": "⏭️ Skipped",
+                                "title": result.get("title", "Unknown"),
+                                "message": "Already exists in database"
+                            })
+                        else:
+                            results["failed"] += 1
+                            results["details"].append({
+                                "url": url,
+                                "status": "❌ Failed",
+                                "title": "N/A",
+                                "message": result.get("error", "Unknown error")
+                            })
+                        
+                        # Update results display
+                        results_df = pd.DataFrame(results["details"])
+                        results_placeholder.dataframe(results_df)
+                    
+                    # Complete progress bar
+                    progress_bar.progress(1.0)
+                    status_placeholder.success("Batch processing completed!")
+                    
+                    # Display final summary
+                    st.subheader("Summary")
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("Successfully Processed", results["success"])
+                    col2.metric("Skipped (Already Exist)", results["skipped"])
+                    col3.metric("Failed", results["failed"])
+    
+    elif page == "Browse Episodes":
+        st.header("Browse Episodes")
+        
+        episodes = db.get_all_episodes()
+        
+        if not episodes:
+            st.info("No episodes found. Add some episodes first!")
+            return
+        
+        # Display episodes in a table
+        df = pd.DataFrame(episodes)
+        df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
+        
+        # Sort by date (newest first)
+        df = df.sort_values('date', ascending=False)
+        
+        st.subheader(f"Total Episodes: {len(df)}")
+        
+        # Display episodes
+        for idx, row in df.iterrows():
+            episode = row.to_dict()
+            with st.expander(f"{episode['title']} - {episode['date']}"):
+                col1, col2 = st.columns([3, 1])
+                
+                with col1:
+                    st.write(f"**Date:** {episode['date']}")
+                    st.write(f"**Video ID:** {episode['video_id']}")
+                    
+                with col2:
+                    st.link_button("Watch on YouTube", episode['url'])
+                
+                # Show transcript tabs
+                tab1, tab2, tab3 = st.tabs(["Summary & Topics", "Enhanced Transcript", "Raw Transcript"])
+                
+                with tab1:
+                    # Display summary if available
+                    if episode.get('summary'):
+                        st.subheader("Episode Summary")
+                        st.markdown(f"<div style='background-color: #f0f2f6; padding: 15px; border-radius: 5px; border-left: 4px solid #4CAF50; color: black;'>{episode['summary']}</div>", unsafe_allow_html=True)
+                    
+                    # Display topics if available
+                    if episode.get('topics'):
+                        try:
+                            import json
+                            topics = json.loads(episode['topics'])
+                            
+                            st.subheader("Main Topics")
+                            topic_cols = st.columns(min(3, len(topics)))
+                            
+                            for i, topic in enumerate(topics):
+                                col_index = i % len(topic_cols)
+                                with topic_cols[col_index]:
+                                    st.markdown(f"<div style='background-color: #e1f5fe; margin: 5px 0; padding: 10px; border-radius: 5px; text-align: center; color: black;'><b>{topic}</b></div>", unsafe_allow_html=True)
+                        except:
+                            st.write("Topics data not available in proper format.")
+                    
+                    # Display key points if available
+                    if episode.get('key_points'):
+                        try:
+                            import json
+                            key_points = json.loads(episode['key_points'])
+                            
+                            st.subheader("Key Points")
+                            for i, point in enumerate(key_points, 1):
+                                st.markdown(f"<div style='background-color: #fff8e1; margin: 5px 0; padding: 10px; border-radius: 5px; color: black;'><b>{i}.</b> {point}</div>", unsafe_allow_html=True)
+                        except:
+                            st.write("Key points data not available in proper format.")
+                    
+                    # If no summary or topics available
+                    if not episode.get('summary') and not episode.get('topics') and not episode.get('key_points'):
+                        st.info("No summary or topic data available for this episode.")
+                        
+                        # Offer to generate them
+                        if st.button("Generate Summary and Topics", key=f"gen_summary_{episode['id']}"):
+                            with st.spinner("Analyzing transcript and generating summary..."):
+                                try:
+                                    # Process only a chunk of the transcript to avoid token limits
+                                    transcript_chunk = episode['enhanced_transcript'][:4000]  # First 4000 characters
+                                    
+                                    # Generate topics and summary
+                                    topics_data = transcript_processor.extract_key_topics(transcript_chunk)
+                                    detailed_summary = transcript_processor.generate_summary(transcript_chunk)
+                                    
+                                    # Convert topics and key_points to strings for storage
+                                    import json
+                                    topics_str = None
+                                    key_points_str = None
+                                    summary = None
+                                    
+                                    if isinstance(topics_data, dict):
+                                        if 'topics' in topics_data and topics_data['topics']:
+                                            topics_str = json.dumps(topics_data['topics'])
+                                        if 'key_points' in topics_data and topics_data['key_points']:
+                                            key_points_str = json.dumps(topics_data['key_points'])
+                                        if 'summary' in topics_data and topics_data['summary'] and "failed" not in topics_data['summary'].lower():
+                                            summary = topics_data['summary']
+                                    
+                                    # If topic extraction didn't provide a summary, use the detailed one
+                                    if not summary or "failed" in summary.lower():
+                                        summary = detailed_summary
+                                    
+                                    # Check if we have valid data
+                                    if (not topics_str and not key_points_str) or not summary or "failed" in summary.lower():
+                                        st.error("Failed to generate meaningful topics or summary. Please try again or adjust the transcript.")
+                                        return
+                                    
+                                    # Update the episode in the database
+                                    updated_data = {
+                                        'video_id': episode['video_id'],
+                                        'title': episode['title'],
+                                        'date': episode['date'],
+                                        'url': episode['url'],
+                                        'raw_transcript': episode['raw_transcript'],
+                                        'enhanced_transcript': episode['enhanced_transcript'],
+                                        'extraction_method': episode.get('extraction_method', 'caption'),
+                                        'topics': topics_str,
+                                        'key_points': key_points_str,
+                                        'summary': summary
+                                    }
+                                    
+                                    db.save_episode(updated_data)
+                                    st.success("Summary and topics generated successfully!")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Error generating summary and topics: {str(e)}")
+                                    st.info("Tip: Try again or check your OpenAI API key configuration.")
+                
+                with tab2:
+                    st.text_area(
+                        "Enhanced Transcript:", 
+                        episode['enhanced_transcript'], 
+                        height=300, 
+                        key=f"enhanced_{episode['id']}"
+                    )
+                
+                with tab3:
+                    st.text_area(
+                        "Raw Transcript:", 
+                        episode['raw_transcript'], 
+                        height=300, 
+                        key=f"raw_{episode['id']}"
+                    )
+    
+    elif page == "Search Transcripts":
+        st.header("Search Transcripts")
+        
+        search_query = st.text_input("Enter search term:", placeholder="Enter words or phrases to search...")
+        
+        if search_query:
+            search_results = db.search_transcripts(search_query)
+            
+            if search_results:
+                st.subheader(f"Found {len(search_results)} result(s)")
+                
+                for result in search_results:
+                    with st.expander(f"{result['title']} - {result['date']}"):
+                        col1, col2 = st.columns([3, 1])
+                        
+                        with col1:
+                            st.write(f"**Date:** {result['date']}")
+                            st.write(f"**Video ID:** {result['video_id']}")
+                            
+                        with col2:
+                            st.link_button("Watch on YouTube", result['url'])
+                        
+                        # Count occurrences
+                        search_terms = [term.strip() for term in search_query.lower().split() if term.strip()]
+                        total_matches = 0
+                        for term in search_terms:
+                            matches = len(re.findall(re.escape(term), result['enhanced_transcript'], re.IGNORECASE))
+                            total_matches += matches
+                        
+                        st.markdown(f"**Found {total_matches} match(es) in transcript:**")
+                        
+                        # Show topics and summary if available
+                        if result.get('summary') or result.get('topics'):
+                            st.markdown("### Summary & Topics")
+                            st.markdown("<hr style='margin: 0.5em 0; border-color: #f0f0f0;'>", unsafe_allow_html=True)
+                            
+                            # Show summary if available
+                            if result.get('summary'):
+                                st.subheader("Episode Summary")
+                                st.markdown(f"<div style='background-color: #f0f2f6; padding: 15px; border-radius: 5px; border-left: 4px solid #4CAF50; color: black;'>{result['summary']}</div>", unsafe_allow_html=True)
+                            
+                            # Show topics if available
+                            col1, col2 = st.columns([1, 1])
+                            
+                            with col1:
+                                if result.get('topics'):
+                                    try:
+                                        import json
+                                        topics = json.loads(result['topics'])
+                                        
+                                        st.subheader("Main Topics")
+                                        for topic in topics:
+                                            st.markdown(f"<div style='background-color: #e1f5fe; margin: 5px 0; padding: 10px; border-radius: 5px; color: black;'><b>•</b> {topic}</div>", unsafe_allow_html=True)
+                                    except:
+                                        pass
+                            
+                            with col2:
+                                if result.get('key_points'):
+                                    try:
+                                        import json
+                                        key_points = json.loads(result['key_points'])
+                                        
+                                        st.subheader("Key Points")
+                                        for i, point in enumerate(key_points, 1):
+                                            st.markdown(f"<div style='background-color: #fff8e1; margin: 5px 0; padding: 10px; border-radius: 5px; color: black;'><b>{i}.</b> {point}</div>", unsafe_allow_html=True)
+                                    except:
+                                        pass
+                        
+                        # Add a separator before the transcript sections
+                        st.markdown("<hr style='margin: 1em 0; border-color: #f0f0f0;'>", unsafe_allow_html=True)
+                        
+                        # Create tabs for context and full transcript
+                        st.markdown("### Transcript Details")
+                        tab1, tab2 = st.tabs(["Context Snippets", "Full Transcript"])
+                        
+                        with tab1:
+                            # Get the full transcript
+                            full_transcript = result['enhanced_transcript']
+                            
+                            # Show context snippets for better readability
+                            st.markdown("**Key passages containing search terms:**")
+                            context_snippets = extract_context_snippets(
+                                result['enhanced_transcript'], 
+                                search_query, 
+                                context_length=150
+                            )
+                            
+                            for i, snippet in enumerate(context_snippets, 1):
+                                st.markdown(
+                                    f"""
+                                    <div style="
+                                        background-color: #fff3cd;
+                                        padding: 10px;
+                                        margin: 5px 0;
+                                        border-radius: 3px;
+                                        border-left: 3px solid #ffc107;
+                                        color: black;
+                                    ">
+                                        <small><strong>Snippet {i}:</strong></small><br>
+                                        {snippet}
+                                    </div>
+                                    """,
+                                    unsafe_allow_html=True
+                                )
+                        
+                        with tab2:
+                            # Apply highlighting using HTML spans
+                            highlighted_transcript = full_transcript
+                            for term in search_terms:
+                                if term:
+                                    # Replace all instances with highlighted version
+                                    pattern = re.compile(f'({re.escape(term)})', re.IGNORECASE)
+                                    highlighted_transcript = pattern.sub(
+                                        r'<span style="background-color: yellow; font-weight: bold; padding: 2px; color: black;">\1</span>',
+                                        highlighted_transcript
+                                    )
+                            
+                            # Display the FULL transcript with highlighting in a scrollable container
+                            st.markdown(
+                                f"""
+                                <div style="
+                                    background-color: #f8f9fa;
+                                    padding: 15px;
+                                    border-radius: 5px;
+                                    border-left: 4px solid #007acc;
+                                    max-height: 500px;
+                                    overflow-y: auto;
+                                    font-family: Arial, sans-serif;
+                                    line-height: 1.5;
+                                    white-space: pre-wrap;
+                                    word-wrap: break-word;
+                                    color: black;
+                                ">
+                                    {highlighted_transcript}
+                                </div>
+                                """,
+                                unsafe_allow_html=True
+                            )
+            else:
+                st.info("No results found for your search query.")
+    
+    elif page == "Database Management":
+        st.header("Database Management")
+        
+        # Check if admin is authenticated
+        if not st.session_state.get("is_admin", False):
+            st.warning("This page requires admin authentication")
+            
+            # Create login form
+            with st.form("admin_login_form"):
+                st.subheader("Admin Login")
+                admin_email = st.text_input("Email", key="admin_email_input")
+                admin_password = st.text_input("Password", type="password", key="admin_password_input")
+                submit_button = st.form_submit_button("Login")
+                
+                if submit_button:
+                    if db.authenticate_admin(admin_email, admin_password):
+                        st.session_state["is_admin"] = True
+                        st.session_state["admin_email"] = admin_email
+                        st.success("Login successful!")
+                        st.rerun()
+                    else:
+                        st.error("Invalid email or password")
+            
+            # Stop rendering the rest of the page if not authenticated
+            return
+        
+        # Show logout button if authenticated
+        if st.sidebar.button("Admin Logout"):
+            if "is_admin" in st.session_state:
+                del st.session_state["is_admin"]
+            if "admin_email" in st.session_state:
+                del st.session_state["admin_email"]
+            st.sidebar.success("Logged out successfully")
+            st.rerun()
+        
+        st.sidebar.success(f"Logged in as {st.session_state.get('admin_email', 'admin')}")
+        
+        # Database Statistics
+        total_episodes = db.get_episode_count()
+        all_episodes = db.get_all_episodes()
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("Total Episodes", total_episodes)
+        
+        with col2:
+            if all_episodes:
+                total_words = sum(len(episode['enhanced_transcript'].split()) for episode in all_episodes)
+                st.metric("Total Words", f"{total_words:,}")
+            else:
+                st.metric("Total Words", "0")
+        
+        with col3:
+            if all_episodes:
+                latest_date = max(episode['date'] for episode in all_episodes)
+                st.metric("Latest Episode", latest_date)
+            else:
+                st.metric("Latest Episode", "None")
+        
+        # Additional statistics about topics and summaries
+        if all_episodes:
+            col1, col2 = st.columns(2)
+            with col1:
+                episodes_with_summaries = sum(1 for ep in all_episodes if ep.get('summary'))
+                summary_percentage = round((episodes_with_summaries / len(all_episodes)) * 100, 1) if all_episodes else 0
+                st.metric("Episodes with Summaries", f"{episodes_with_summaries}/{len(all_episodes)} ({summary_percentage}%)")
+            
+            with col2:
+                episodes_with_topics = sum(1 for ep in all_episodes if ep.get('topics'))
+                topics_percentage = round((episodes_with_topics / len(all_episodes)) * 100, 1) if all_episodes else 0
+                st.metric("Episodes with Topics", f"{episodes_with_topics}/{len(all_episodes)} ({topics_percentage}%)")
+        
+        st.markdown("---")
+        
+        # Database Operations
+        tab1, tab2, tab3 = st.tabs(["Episode Management", "Data Enrichment", "Database Info"])
+        
+        with tab1:
+            st.subheader("Episode Management")
+            
+            if all_episodes:
+                # Show episodes in a table format
+                df = pd.DataFrame(all_episodes)
+                df_display = df[['id', 'title', 'date', 'video_id']].copy()
+                df_display.columns = ['ID', 'Title', 'Date', 'Video ID']
+                
+                st.dataframe(df_display, use_container_width=True)
+                
+                # Delete episode functionality
+                st.markdown("**Delete Episode:**")
+                episode_to_delete = st.selectbox(
+                    "Select episode to delete:",
+                    options=[f"{ep['id']} - {ep['title'][:50]}..." for ep in all_episodes],
+                    key="delete_episode"
+                )
+                
+                if st.button("Delete Selected Episode", type="secondary"):
+                    if episode_to_delete:
+                        episode_id = int(episode_to_delete.split(" - ")[0])
+                        if db.delete_episode(episode_id):
+                            st.success("Episode deleted successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Failed to delete episode.")
+            else:
+                st.info("No episodes in database yet.")
+        
+        with tab2:
+            st.subheader("Generate Summaries and Topics")
+            
+            # Check if we have episodes that need enrichment
+            if all_episodes:
+                # Count episodes without summaries or topics
+                episodes_missing_data = [ep for ep in all_episodes if not ep.get('summary') or not ep.get('topics')]
+                
+                if episodes_missing_data:
+                    st.info(f"Found {len(episodes_missing_data)} episode(s) that need summaries or topics.")
+                    
+                    # Options for batch processing
+                    process_options = st.radio(
+                        "Choose processing option:",
+                        ["Process all episodes missing data", "Select specific episodes to process"],
+                        key="process_option"
+                    )
+                    
+                    episodes_to_process = []
+                    
+                    if process_options == "Process all episodes missing data":
+                        episodes_to_process = episodes_missing_data
+                    else:
+                        # Allow selecting specific episodes
+                        episode_options = [f"{ep['id']} - {ep['title'][:50]}..." for ep in episodes_missing_data]
+                        selected_episodes = st.multiselect(
+                            "Select episodes to process:",
+                            options=episode_options,
+                            key="selected_episodes"
+                        )
+                        
+                        # Extract episode IDs from selection
+                        selected_ids = [int(ep.split(" - ")[0]) for ep in selected_episodes]
+                        episodes_to_process = [ep for ep in episodes_missing_data if ep['id'] in selected_ids]
+                    
+                    # Add advanced options
+                    with st.expander("Advanced Options"):
+                        chunk_size = st.slider(
+                            "Transcript chunk size (characters):",
+                            min_value=1000,
+                            max_value=8000,
+                            value=4000,
+                            step=500,
+                            help="Larger chunks include more context but may exceed token limits"
+                        )
+                        
+                        max_retries = st.number_input(
+                            "Max retries per episode:",
+                            min_value=0,
+                            max_value=5,
+                            value=2,
+                            help="Number of times to retry processing an episode if it fails"
+                        )
+                    
+                    if st.button("Generate Summaries and Topics", disabled=len(episodes_to_process) == 0):
+                        progress_bar = st.progress(0)
+                        status_text = st.empty()
+                        error_log = []
+                        
+                        # Process each episode
+                        for i, episode in enumerate(episodes_to_process):
+                            progress_percent = i / len(episodes_to_process)
+                            progress_bar.progress(progress_percent)
+                            status_text.info(f"Processing {i+1}/{len(episodes_to_process)}: {episode['title'][:50]}...")
+                            
+                            success = False
+                            retries = 0
+                            
+                            # Try to process with retries
+                            while not success and retries <= max_retries:
+                                try:
+                                    if retries > 0:
+                                        status_text.warning(f"Retry {retries}/{max_retries} for episode: {episode['title'][:50]}...")
+                                    
+                                    # Process transcript in chunks if it's very long
+                                    transcript = episode['enhanced_transcript']
+                                    transcript_chunk = transcript[:chunk_size]  # Use only the first chunk for topic extraction
+                                    
+                                    # Generate topics and summary
+                                    topics_data = transcript_processor.extract_key_topics(transcript_chunk)
+                                    
+                                    # If no error occurred with topics, try to get a detailed summary
+                                    detailed_summary = transcript_processor.generate_summary(transcript_chunk)
+                                    
+                                    # Convert topics and key_points to strings for storage
+                                    import json
+                                    topics_str = None
+                                    key_points_str = None
+                                    summary = None
+                                    
+                                    if isinstance(topics_data, dict):
+                                        if 'topics' in topics_data and topics_data['topics']:
+                                            topics_str = json.dumps(topics_data['topics'])
+                                        if 'key_points' in topics_data and topics_data['key_points']:
+                                            key_points_str = json.dumps(topics_data['key_points'])
+                                        if 'summary' in topics_data and topics_data['summary']:
+                                            summary = topics_data['summary']
+                                    
+                                    # If topic extraction didn't provide a summary, use the detailed one
+                                    if not summary or "failed" in summary.lower():
+                                        summary = detailed_summary
+                                    
+                                    # Check if we have valid data
+                                    if (topics_str or key_points_str) and summary and "failed" not in summary.lower():
+                                        # Update the episode in the database
+                                        updated_data = {
+                                            'video_id': episode['video_id'],
+                                            'title': episode['title'],
+                                            'date': episode['date'],
+                                            'url': episode['url'],
+                                            'raw_transcript': episode['raw_transcript'],
+                                            'enhanced_transcript': episode['enhanced_transcript'],
+                                            'extraction_method': episode.get('extraction_method', 'caption'),
+                                            'topics': topics_str,
+                                            'key_points': key_points_str,
+                                            'summary': summary
+                                        }
+                                        
+                                        db.save_episode(updated_data)
+                                        success = True
+                                    else:
+                                        raise ValueError("No valid topics or summary generated")
+                                    
+                                except Exception as e:
+                                    retries += 1
+                                    error_message = f"Error processing episode {episode['id']}: {str(e)}"
+                                    if retries > max_retries:
+                                        error_log.append({
+                                            "episode_id": episode['id'],
+                                            "title": episode['title'],
+                                            "error": str(e)
+                                        })
+                            
+                            # Show success or failure for this episode
+                            if success:
+                                status_text.success(f"Successfully processed episode {i+1}/{len(episodes_to_process)}")
+                            else:
+                                status_text.error(f"Failed to process episode {i+1}/{len(episodes_to_process)} after {max_retries} retries")
+                        
+                        progress_bar.progress(1.0)
+                        
+                        # Show final results
+                        st.subheader("Processing Results")
+                        successful_count = len(episodes_to_process) - len(error_log)
+                        st.success(f"Successfully processed {successful_count} out of {len(episodes_to_process)} episodes.")
+                        
+                        if error_log:
+                            st.error(f"Failed to process {len(error_log)} episodes.")
+                            with st.expander("Show Error Details"):
+                                for error in error_log:
+                                    st.markdown(f"**Episode {error['episode_id']}:** {error['title']}")
+                                    st.markdown(f"*Error:* {error['error']}")
+                                    st.markdown("---")
+                        
+                        # Offer to reload the page
+                        if successful_count > 0:
+                            if st.button("Reload Page to See Results"):
+                                st.rerun()
+                else:
+                    st.success("All episodes have summaries and topics already!")
+            else:
+                st.info("No episodes in database yet.")
+        
+        with tab3:
+            st.subheader("Database Info")
+            
+            # Create tabs for database info and admin management
+            db_info_tab, admin_tab = st.tabs(["Database Info", "Admin Management"])
+            
+            with db_info_tab:
+                # Show database file info
+                import os
+                db_path = db.db_path
+                if os.path.exists(db_path):
+                    file_size = os.path.getsize(db_path)
+                    st.write(f"**Database file:** {db_path}")
+                    st.write(f"**File size:** {file_size / 1024:.2f} KB")
+                    st.write(f"**Total episodes:** {total_episodes}")
+                
+                # Export functionality
+                st.markdown("**Export Data:**")
+                
+                if all_episodes:
+                    export_format = st.selectbox(
+                        "Select export format:",
+                        ["CSV", "JSON"],
+                        key="export_format"
+                    )
+                    
+                    if st.button("Export All Episodes", key="export_button"):
+                        df = pd.DataFrame(all_episodes)
+                        
+                        if export_format == "CSV":
+                            # Prepare CSV file for download
+                            csv_data = df[['id', 'title', 'date', 'url', 'video_id']].to_csv(index=False)
+                            
+                            st.download_button(
+                                label="Download CSV",
+                                data=csv_data,
+                                file_name="cwsa_episodes.csv",
+                                mime="text/csv"
+                            )
+                        else:
+                            # Prepare JSON file for download
+                            json_data = df[['id', 'title', 'date', 'url', 'video_id']].to_json(orient="records")
+                            
+                            st.download_button(
+                                label="Download JSON",
+                                data=json_data,
+                                file_name="cwsa_episodes.json",
+                                mime="application/json"
+                            )
+                else:
+                    st.info("No episodes to export.")
+            
+            with admin_tab:
+                st.subheader("Admin User Management")
+                
+                # Get admin users
+                admin_users = db.get_admin_users()
+                
+                if admin_users:
+                    st.write("**Current Admin Users:**")
+                    
+                    for user in admin_users:
+                        st.markdown(f"🔑 **{user['email']}** (ID: {user['id']})")
+                
+                # Add form to create new admin user
+                st.write("**Add New Admin User:**")
+                
+                with st.form("add_admin_form"):
+                    new_admin_email = st.text_input("Email", key="new_admin_email")
+                    new_admin_password = st.text_input("Password", type="password", key="new_admin_password")
+                    confirm_password = st.text_input("Confirm Password", type="password", key="confirm_admin_password")
+                    
+                    submit_button = st.form_submit_button("Add Admin User")
+                    
+                    if submit_button:
+                        if not new_admin_email or not new_admin_password:
+                            st.error("Email and password are required")
+                        elif new_admin_password != confirm_password:
+                            st.error("Passwords do not match")
+                        else:
+                            # Add admin user to database
+                            try:
+                                db._create_admin_user(new_admin_email, new_admin_password)
+                                st.success(f"Admin user {new_admin_email} added successfully")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error adding admin user: {str(e)}")
+                
+                # Change own password
+                st.write("**Change Your Password:**")
+                
+                with st.form("change_password_form"):
+                    current_password = st.text_input("Current Password", type="password", key="current_password")
+                    new_password = st.text_input("New Password", type="password", key="new_password")
+                    confirm_new_password = st.text_input("Confirm New Password", type="password", key="confirm_new_password")
+                    
+                    submit_button = st.form_submit_button("Change Password")
+                    
+                    if submit_button:
+                        admin_email = st.session_state.get("admin_email")
+                        
+                        if not admin_email:
+                            st.error("Admin email not found in session")
+                        elif not current_password or not new_password:
+                            st.error("All fields are required")
+                        elif new_password != confirm_new_password:
+                            st.error("New passwords do not match")
+                        else:
+                            # Verify current password
+                            if db.authenticate_admin(admin_email, current_password):
+                                try:
+                                    # Update admin password
+                                    with sqlite3.connect(db.db_path) as conn:
+                                        cursor = conn.cursor()
+                                        new_password_hash = db._hash_password(new_password)
+                                        cursor.execute("""
+                                            UPDATE admin_users 
+                                            SET password_hash = ?
+                                            WHERE email = ?
+                                        """, (new_password_hash, admin_email))
+                                        conn.commit()
+                                    
+                                    st.success("Password changed successfully")
+                                except Exception as e:
+                                    st.error(f"Error changing password: {str(e)}")
+                            else:
+                                st.error("Current password is incorrect")
+
+if __name__ == "__main__":
+    main()
+
+
+
+
+================================================================
+End of Codebase
+================================================================
