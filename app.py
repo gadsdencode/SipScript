@@ -88,7 +88,7 @@ def extract_context_snippets(text, search_query, context_length=150):
     return snippets[:5]  # Return top 5 unique snippets
 
 def main():
-    st.title("Coffee with Scott Adams - Transcript Extractor & Enhancer")
+    st.title("CWSA Transcript Extractor & Search")
     st.markdown("---")
     
     # Initialize components
@@ -107,6 +107,46 @@ def main():
             placeholder="https://www.youtube.com/watch?v=..."
         )
         
+        # Extraction method selection
+        st.subheader("Choose Transcript Extraction Method")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.markdown("**📝 Caption-Based**")
+            st.markdown("• Fast API extraction")
+            st.markdown("• May be blocked")
+            
+        with col2:
+            st.markdown("**🌐 Web Scraping**")
+            st.markdown("• Bypasses all blocks")
+            st.markdown("• Always works")
+            st.markdown("• Most reliable")
+            
+        with col3:
+            st.markdown("**🎤 Audio-Based**")
+            st.markdown("• Speech recognition")
+            st.markdown("• No captions needed")
+            st.markdown("• Takes 2-5 minutes")
+        
+        extraction_method = st.radio(
+            "Select extraction method:",
+            ["Caption-Based (Fast)", "Web Scraping (Bypasses Blocks)", "Audio-Based (No Captions Needed)"],
+            horizontal=True
+        )
+        
+        # Show quality options for audio-based extraction
+        quality_level = "Fast"  # Default value
+        if "Audio-Based" in extraction_method:
+            st.info("💡 **Tip:** Audio extraction takes longer but works when captions aren't available. Processing time: 2-5 minutes for typical episodes.")
+            
+            quality_level = st.selectbox(
+                "Choose processing speed:",
+                ["Fast (tiny model)", "Balanced (base model)", "Best Quality (small model)"],
+                index=0,
+                help="Fast: ~2 min, Balanced: ~4 min, Best: ~6 min for typical episodes"
+            )
+        
         if st.button("Extract and Process Transcript", disabled=not youtube_url):
             video_id = validate_youtube_url(youtube_url)
             
@@ -121,26 +161,72 @@ def main():
                 st.info(f"Episode Title: {existing_episode['title']}")
                 return
             
-            with st.spinner("Extracting transcript from YouTube..."):
-                try:
-                    # Extract transcript and metadata
-                    transcript_data = youtube_handler.extract_transcript(video_id)
-                    
-                    if not transcript_data:
-                        st.error("Could not extract transcript from this video. The video might not have captions available.")
+            # Choose extraction method based on user selection
+            if "Caption-Based" in extraction_method:
+                with st.spinner("Extracting transcript from YouTube captions..."):
+                    try:
+                        transcript_data = youtube_handler.extract_transcript(video_id)
+                        
+                        if not transcript_data:
+                            st.error("Could not extract transcript from captions. Try the Web Scraping method instead.")
+                            return
+                        
+                        st.success("Transcript extracted successfully from captions!")
+                        
+                    except Exception as e:
+                        st.error(f"Error extracting transcript from captions: {str(e)}")
+                        st.info("💡 Tip: Try the Web Scraping method which bypasses all blocking restrictions.")
                         return
-                    
-                    st.success("Transcript extracted successfully!")
-                    
-                    # Display raw transcript preview
-                    st.subheader("Raw Transcript Preview:")
-                    st.text_area("Raw transcript (first 500 characters):", 
-                               transcript_data['transcript'][:500] + "...", 
-                               height=150, disabled=True)
-                    
-                except Exception as e:
-                    st.error(f"Error extracting transcript: {str(e)}")
-                    return
+            elif "Web Scraping" in extraction_method:
+                with st.spinner("Extracting transcript using web scraping (bypasses all blocks)..."):
+                    try:
+                        transcript_data = youtube_handler.extract_transcript_web_scraping(video_id)
+                        
+                        if not transcript_data:
+                            st.error("Could not extract transcript using web scraping. Try the Audio-Based method instead.")
+                            return
+                        
+                        st.success("Transcript extracted successfully using web scraping!")
+                        
+                    except Exception as e:
+                        st.error(f"Error extracting transcript with web scraping: {str(e)}")
+                        st.info("💡 Tip: Try the Audio-Based extraction method as an alternative.")
+                        return
+            else:
+                # Audio-based extraction with progress updates
+                progress_placeholder = st.empty()
+                
+                def progress_callback(message):
+                    progress_placeholder.info(f"🎵 {message}")
+                
+                with st.spinner("Extracting transcript from audio... This may take several minutes."):
+                    try:
+                        transcript_data = youtube_handler.extract_transcript_from_audio(
+                            video_id, 
+                            progress_callback=progress_callback,
+                            quality_level=quality_level.split(" (")[0]  # Extract just "Fast", "Balanced", or "Best Quality"
+                        )
+                        
+                        if not transcript_data:
+                            st.error("Could not extract transcript from audio. Please try a different video.")
+                            return
+                        
+                        progress_placeholder.empty()
+                        st.success("Transcript extracted successfully from audio!")
+                        
+                    except Exception as e:
+                        progress_placeholder.empty()
+                        st.error(f"Error extracting transcript from audio: {str(e)}")
+                        st.info("💡 Tip: Try the Caption-Based extraction method if available.")
+                        return
+            
+            # Display raw transcript preview
+            st.subheader("Raw Transcript Preview:")
+            extraction_type = transcript_data.get('extraction_method', 'caption')
+            st.caption(f"Extracted using: {extraction_type}-based method")
+            st.text_area("Raw transcript (first 500 characters):", 
+                       transcript_data['transcript'][:500] + "...", 
+                       height=150, disabled=True)
             
             with st.spinner("Enhancing transcript with AI..."):
                 try:
@@ -170,7 +256,8 @@ def main():
                         'date': transcript_data['date'],
                         'url': youtube_url,
                         'raw_transcript': transcript_data['transcript'],
-                        'enhanced_transcript': enhanced_transcript
+                        'enhanced_transcript': enhanced_transcript,
+                        'extraction_method': transcript_data.get('extraction_method', 'caption')
                     }
                     
                     db.save_episode(episode_data)
@@ -439,7 +526,7 @@ def main():
     
     # Footer
     st.markdown("---")
-    st.markdown("*Built with Streamlit for Coffee with Scott Adams podcast transcript management*")
+    st.markdown("*Built with Streamlit by Gadsdencode in honor of Scott Adams and his enormous impact on my life. Hopefully this boosts his immortality signal a bit more.")
 
 if __name__ == "__main__":
     main()

@@ -1,13 +1,86 @@
 import re
+import os
+import tempfile
 from datetime import datetime
 from typing import Optional, Dict
 from youtube_transcript_api import YouTubeTranscriptApi
 import requests
+import yt_dlp
+import whisper
+from pydub import AudioSegment
+from googleapiclient.discovery import build
+from caption_scraper import CaptionScraper
 
 class YouTubeHandler:
     def __init__(self):
         """Initialize YouTube handler"""
-        pass
+        self.whisper_model = None  # Load model only when needed to save memory
+        self.youtube_api = None
+        self.caption_scraper = CaptionScraper()
+        self._init_youtube_api()
+    
+    def _init_youtube_api(self):
+        """Initialize YouTube Data API with authentication"""
+        try:
+            api_key = os.getenv('YOUTUBE_API_KEY')
+            if api_key:
+                self.youtube_api = build('youtube', 'v3', developerKey=api_key)
+                print("YouTube API initialized successfully with authentication")
+            else:
+                print("YouTube API key not found, using fallback methods")
+        except Exception as e:
+            print(f"Failed to initialize YouTube API: {e}")
+    
+    def _get_video_metadata_with_api(self, video_id: str) -> Dict:
+        """Get video metadata using authenticated YouTube Data API"""
+        try:
+            if self.youtube_api:
+                request = self.youtube_api.videos().list(
+                    part="snippet,contentDetails",
+                    id=video_id
+                )
+                response = request.execute()
+                
+                if response['items']:
+                    video = response['items'][0]
+                    snippet = video['snippet']
+                    
+                    # Parse duration if available
+                    duration = None
+                    if 'contentDetails' in video and 'duration' in video['contentDetails']:
+                        duration_str = video['contentDetails']['duration']
+                        # Convert ISO 8601 duration to seconds (PT1H2M3S format)
+                        match = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', duration_str)
+                        if match:
+                            hours, minutes, seconds = match.groups()
+                            duration = (int(hours or 0) * 3600 + 
+                                      int(minutes or 0) * 60 + 
+                                      int(seconds or 0))
+                    
+                    # Parse upload date
+                    upload_date = snippet.get('publishedAt', '')
+                    try:
+                        date_obj = datetime.fromisoformat(upload_date.replace('Z', '+00:00'))
+                        formatted_date = date_obj.strftime('%Y-%m-%d')
+                    except:
+                        formatted_date = datetime.now().strftime('%Y-%m-%d')
+                    
+                    return {
+                        'title': self._clean_title(snippet.get('title', f'Video {video_id}')),
+                        'date': formatted_date,
+                        'channel': snippet.get('channelTitle', 'Unknown Channel'),
+                        'duration': duration
+                    }
+        except Exception as e:
+            print(f"API metadata extraction failed: {e}")
+        
+        # Fallback metadata
+        return {
+            'title': f"Coffee with Scott Adams - Episode {video_id}",
+            'date': datetime.now().strftime('%Y-%m-%d'),
+            'channel': "Scott Adams",
+            'duration': None
+        }
     
     def extract_video_id(self, url: str) -> Optional[str]:
         """Extract video ID from various YouTube URL formats"""
@@ -55,8 +128,180 @@ class YouTubeHandler:
             }
             
         except Exception as e:
-            print(f"Error extracting transcript for video {video_id}: {str(e)}")
+            error_msg = str(e)
+            print(f"Error extracting transcript for video {video_id}: {error_msg}")
+            
+            # Check for specific YouTube blocking errors and try web scraping fallback
+            if "IP belonging to a cloud provider" in error_msg or "blocked" in error_msg.lower():
+                print("API blocked, trying web scraping method...")
+                try:
+                    return self.caption_scraper.extract_captions_from_page(video_id)
+                except Exception as scrape_error:
+                    print(f"Web scraping also failed: {scrape_error}")
+                    raise Exception("Both API and web scraping methods failed. Try the Audio-Based extraction method.")
+            else:
+                raise Exception(f"Caption extraction failed: {error_msg}")
+            
             return None
+
+    def extract_transcript_from_audio(self, video_id: str, progress_callback=None, quality_level="Fast") -> Optional[Dict]:
+        """
+        Extract transcript from YouTube video audio using Whisper AI
+        This method downloads audio and uses speech recognition for transcription
+        """
+        temp_dir = None
+        try:
+            # Create temporary directory for audio files
+            temp_dir = tempfile.mkdtemp()
+            audio_path = os.path.join(temp_dir, f"{video_id}.wav")
+            
+            if progress_callback:
+                progress_callback("Downloading audio from YouTube...")
+            
+            # Download audio using yt-dlp with optimized settings and bot bypass
+            ydl_opts = {
+                'format': 'worstaudio/worst',  # Use lower quality for faster processing
+                'outtmpl': os.path.join(temp_dir, f"{video_id}.%(ext)s"),
+                'extractaudio': True,
+                'audioformat': 'mp3',  # MP3 is smaller and faster to process
+                'audioquality': '9',   # Lower quality for speed
+                'quiet': True,
+                'no_warnings': True,
+                # Add headers to appear more like a regular browser
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'en-us,en;q=0.5',
+                    'Accept-Encoding': 'gzip,deflate',
+                    'Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.7',
+                    'Keep-Alive': '300',
+                    'Connection': 'keep-alive',
+                },
+                # Try to bypass age restrictions
+                'age_limit': None,
+                'skip_download': False,
+            }
+            
+            url = f"https://www.youtube.com/watch?v={video_id}"
+            
+            # Get enhanced metadata using API if available
+            api_metadata = self._get_video_metadata_with_api(video_id)
+            
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                # Extract video info first
+                info = ydl.extract_info(url, download=False)
+                
+                # Use API metadata if available, fallback to yt-dlp
+                title = api_metadata.get('title') or info.get('title', f'Video {video_id}')
+                duration = api_metadata.get('duration') or info.get('duration')
+                upload_date = api_metadata.get('date') or info.get('upload_date')
+                channel = api_metadata.get('channel') or info.get('uploader')
+                
+                # Format date
+                if upload_date:
+                    try:
+                        date_obj = datetime.strptime(upload_date, '%Y%m%d')
+                        formatted_date = date_obj.strftime('%Y-%m-%d')
+                    except:
+                        formatted_date = datetime.now().strftime('%Y-%m-%d')
+                else:
+                    formatted_date = datetime.now().strftime('%Y-%m-%d')
+                
+                # Download audio
+                ydl.download([url])
+            
+            # Find the downloaded audio file
+            downloaded_files = [f for f in os.listdir(temp_dir) if f.startswith(video_id)]
+            if not downloaded_files:
+                raise Exception("Failed to download audio file")
+            
+            audio_file = os.path.join(temp_dir, downloaded_files[0])
+            
+            if progress_callback:
+                progress_callback("Converting audio format...")
+            
+            # Convert and compress audio for faster processing
+            audio = AudioSegment.from_file(audio_file)
+            
+            # Compress audio: reduce sample rate and convert to mono for speed
+            audio = audio.set_frame_rate(16000)  # Lower sample rate for faster processing
+            audio = audio.set_channels(1)       # Convert to mono
+            
+            # Export as WAV for Whisper
+            audio_path = os.path.join(temp_dir, f"{video_id}_compressed.wav")
+            audio.export(audio_path, format="wav")
+            
+            if progress_callback:
+                progress_callback("Loading speech recognition model...")
+            
+            # Load Whisper model based on quality level
+            model_map = {
+                "Fast": "tiny",
+                "Balanced": "base", 
+                "Best Quality": "small"
+            }
+            
+            model_size = model_map.get(quality_level, "tiny")
+            
+            if self.whisper_model is None or getattr(self, '_current_model_size', None) != model_size:
+                if progress_callback:
+                    progress_callback(f"Loading {model_size} speech recognition model...")
+                self.whisper_model = whisper.load_model(model_size)
+                self._current_model_size = model_size
+            
+            if progress_callback:
+                progress_callback("Transcribing audio... This may take a few minutes.")
+            
+            # Transcribe audio with optimized settings
+            result = self.whisper_model.transcribe(
+                audio_path,
+                fp16=False,  # Use FP32 for CPU compatibility
+                verbose=False,  # Reduce output
+                language="en",  # Assume English for Scott Adams podcasts
+                temperature=0.0,  # More consistent results
+                compression_ratio_threshold=2.4,  # Prevent cutting off content
+                logprob_threshold=-1.0,  # Include more uncertain words
+                no_speech_threshold=0.6  # Better handling of quiet sections
+            )
+            transcript_text = result["text"]
+            
+            if not transcript_text or len(transcript_text.strip()) < 50:
+                raise ValueError("Generated transcript is too short or empty")
+            
+            # Clean up the transcript
+            cleaned_transcript = self._clean_whisper_transcript(transcript_text)
+            
+            return {
+                'transcript': cleaned_transcript,
+                'title': self._clean_title(title),
+                'date': formatted_date,
+                'duration': duration,
+                'channel': channel,
+                'video_id': video_id,
+                'extraction_method': 'audio'  # Mark this as audio-extracted
+            }
+            
+        except Exception as e:
+            error_msg = str(e)
+            print(f"Error extracting transcript from audio for video {video_id}: {error_msg}")
+            
+            # Check for specific YouTube blocking errors
+            if "Sign in to confirm you're not a bot" in error_msg:
+                raise Exception("YouTube is blocking audio downloads from this environment. This is common on cloud platforms. Try using the Caption-Based extraction method instead, which often works better.")
+            elif "blocked" in error_msg.lower() or "forbidden" in error_msg.lower():
+                raise Exception("YouTube has blocked access to this video's audio. Try using the Caption-Based extraction method instead.")
+            else:
+                raise Exception(f"Audio extraction failed: {error_msg}")
+            
+            return None
+        finally:
+            # Clean up temporary files
+            if temp_dir and os.path.exists(temp_dir):
+                import shutil
+                try:
+                    shutil.rmtree(temp_dir)
+                except:
+                    pass  # Best effort cleanup
     
     def _combine_transcript_segments(self, transcript_list: list) -> str:
         """Combine transcript segments into readable text"""
@@ -204,3 +449,145 @@ class YouTubeHandler:
         except Exception as e:
             print(f"Error getting transcript languages for {video_id}: {str(e)}")
             return []
+
+    def _clean_whisper_transcript(self, text: str) -> str:
+        """Clean Whisper-generated transcript text"""
+        # Remove excessive whitespace
+        text = re.sub(r'\s+', ' ', text)
+        
+        # Whisper sometimes adds timestamps or markers, remove them
+        text = re.sub(r'\[\d+:\d+:\d+\.\d+\s*-->\s*\d+:\d+:\d+\.\d+\]', '', text)
+        text = re.sub(r'\d+:\d+\.\d+', '', text)
+        
+        # Clean up common speech recognition artifacts
+        text = re.sub(r'\[MUSIC\]', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\[APPLAUSE\]', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\[LAUGHTER\]', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\[INAUDIBLE\]', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\[UNCLEAR\]', '', text, flags=re.IGNORECASE)
+        
+        # Remove common filler words that speech recognition might capture
+        text = re.sub(r'\b(uh|um|er|ah)\b', '', text, flags=re.IGNORECASE)
+        
+        # Ensure proper sentence spacing
+        text = re.sub(r'([.!?])\s*([A-Z])', r'\1 \2', text)
+        
+        # Remove multiple spaces
+        text = re.sub(r'\s+', ' ', text)
+        
+        return text.strip()
+
+    def extract_transcript_with_api(self, video_id: str) -> Optional[Dict]:
+        """
+        Extract transcript using authenticated YouTube Data API
+        This bypasses IP blocking by using official API access
+        """
+        try:
+            if not self.youtube_api:
+                raise Exception("YouTube API not initialized. API key required.")
+            
+            # Get video metadata first
+            metadata = self._get_video_metadata_with_api(video_id)
+            
+            # Get list of available captions
+            captions_request = self.youtube_api.captions().list(
+                part="snippet",
+                videoId=video_id
+            )
+            captions_response = captions_request.execute()
+            
+            if not captions_response.get('items'):
+                raise Exception("No captions available for this video")
+            
+            # Find English captions (prefer manually created over auto-generated)
+            english_caption = None
+            for caption in captions_response['items']:
+                lang = caption['snippet']['language']
+                track_kind = caption['snippet'].get('trackKind', 'standard')
+                
+                if lang in ['en', 'en-US', 'en-GB']:
+                    if track_kind == 'standard':  # Manually created captions
+                        english_caption = caption
+                        break
+                    elif english_caption is None:  # Auto-generated as fallback
+                        english_caption = caption
+            
+            if not english_caption:
+                raise Exception("No English captions found for this video")
+            
+            # Download the caption content
+            caption_id = english_caption['id']
+            download_request = self.youtube_api.captions().download(
+                id=caption_id,
+                tfmt='srt'  # SubRip format
+            )
+            
+            # Execute the download
+            caption_content = download_request.execute()
+            
+            if isinstance(caption_content, bytes):
+                caption_content = caption_content.decode('utf-8')
+            
+            # Parse SRT content to extract text
+            transcript_text = self._parse_srt_content(caption_content)
+            
+            if not transcript_text or len(transcript_text.strip()) < 50:
+                raise Exception("Generated transcript is too short or empty")
+            
+            return {
+                'transcript': transcript_text,
+                'title': metadata.get('title', f'Video {video_id}'),
+                'date': metadata.get('date', datetime.now().strftime('%Y-%m-%d')),
+                'duration': metadata.get('duration'),
+                'channel': metadata.get('channel'),
+                'video_id': video_id,
+                'extraction_method': 'api_captions'
+            }
+            
+        except Exception as e:
+            print(f"Error extracting transcript with API for video {video_id}: {str(e)}")
+            raise Exception(f"API caption extraction failed: {str(e)}")
+    
+    def _parse_srt_content(self, srt_content: str) -> str:
+        """Parse SRT subtitle content to extract plain text"""
+        import re
+        
+        lines = srt_content.split('\n')
+        text_lines = []
+        
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+            
+            # Skip sequence numbers and timestamp lines
+            if line.isdigit() or '-->' in line or not line:
+                i += 1
+                continue
+            
+            # Clean subtitle text
+            cleaned_line = re.sub(r'<[^>]+>', '', line)  # Remove HTML tags
+            cleaned_line = re.sub(r'\[.*?\]', '', cleaned_line)  # Remove bracketed content
+            cleaned_line = cleaned_line.strip()
+            
+            if cleaned_line:
+                text_lines.append(cleaned_line)
+            
+            i += 1
+        
+        # Join and clean up text
+        full_text = ' '.join(text_lines)
+        full_text = re.sub(r'\s+', ' ', full_text)
+        full_text = re.sub(r'([.!?])\s*([A-Z])', r'\1 \2', full_text)
+        
+        return full_text.strip()
+
+    def extract_transcript_web_scraping(self, video_id: str) -> Optional[Dict]:
+        """
+        Extract transcript using web scraping - bypasses all API restrictions
+        This method directly scrapes YouTube's web page for caption data
+        """
+        try:
+            return self.caption_scraper.extract_captions_from_page(video_id)
+        except Exception as e:
+            print(f"Error with web scraping extraction for video {video_id}: {str(e)}")
+            raise Exception(f"Web scraping extraction failed: {str(e)}")
