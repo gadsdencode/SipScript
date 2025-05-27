@@ -15,28 +15,21 @@ class CaptionScraper:
 
     def extract_captions_from_page(self, video_id: str) -> Optional[Dict]:
         """
-        Extract captions directly from YouTube's web page
-        This method scrapes the page HTML to find caption data
+        Extract captions directly from YouTube using multiple strategies
         """
         try:
-            url = f"https://www.youtube.com/watch?v={video_id}"
-            response = self.session.get(url, timeout=15)
+            # Strategy 1: Try direct timedtext API
+            caption_text = self._try_direct_timedtext_api(video_id)
             
-            if response.status_code != 200:
-                return None
-            
-            html_content = response.text
-            
-            # Extract video title and metadata
-            title = self._extract_title(html_content)
-            upload_date = self._extract_upload_date(html_content)
-            channel = self._extract_channel(html_content)
-            
-            # Look for caption data in the page
-            caption_text = self._extract_caption_data(html_content)
+            if not caption_text:
+                # Strategy 2: Try transcript page scraping
+                caption_text = self._try_transcript_page_scraping(video_id)
             
             if not caption_text or len(caption_text.strip()) < 50:
                 return None
+            
+            # Get basic metadata
+            title, upload_date, channel = self._get_basic_metadata(video_id)
             
             return {
                 'transcript': caption_text,
@@ -50,6 +43,75 @@ class CaptionScraper:
         except Exception as e:
             print(f"Error scraping captions for {video_id}: {e}")
             return None
+
+    def _try_direct_timedtext_api(self, video_id: str) -> Optional[str]:
+        """Try using youtube-transcript-api with authentication"""
+        try:
+            from youtube_transcript_api import YouTubeTranscriptApi
+            import os
+            
+            # Check if we have YouTube cookies for authentication
+            cookies_file = os.environ.get('YOUTUBE_COOKIES')
+            
+            if cookies_file:
+                # Use cookies for authentication to bypass IP blocking
+                transcript_list = YouTubeTranscriptApi.get_transcript(
+                    video_id, 
+                    languages=['en', 'en-US'],
+                    cookies=cookies_file
+                )
+            else:
+                # Try without authentication first
+                transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'en-US'])
+            
+            if transcript_list:
+                # Combine all text segments
+                full_text = ' '.join([item['text'] for item in transcript_list])
+                return self._clean_text(full_text)
+                
+        except ImportError:
+            print("youtube-transcript-api not available")
+        except Exception as e:
+            if "IP" in str(e) or "blocked" in str(e).lower():
+                print(f"YouTube is blocking requests from this server. Authentication needed: {e}")
+                return "AUTH_REQUIRED"
+            else:
+                print(f"YouTube Transcript API failed: {e}")
+            
+        return None
+
+    def _try_transcript_page_scraping(self, video_id: str) -> Optional[str]:
+        """Try scraping the main video page for embedded captions"""
+        try:
+            url = f"https://www.youtube.com/watch?v={video_id}"
+            response = self.session.get(url, timeout=15)
+            
+            if response.status_code != 200:
+                return None
+            
+            html_content = response.text
+            return self._extract_caption_data(html_content)
+            
+        except Exception as e:
+            print(f"Page scraping failed: {e}")
+            return None
+
+    def _get_basic_metadata(self, video_id: str) -> tuple:
+        """Get basic video metadata"""
+        try:
+            url = f"https://www.youtube.com/watch?v={video_id}"
+            response = self.session.get(url, timeout=10)
+            
+            if response.status_code == 200:
+                html = response.text
+                title = self._extract_title(html)
+                date = self._extract_upload_date(html)
+                channel = self._extract_channel(html)
+                return title, date, channel
+        except:
+            pass
+        
+        return None, None, None
 
     def _extract_title(self, html: str) -> Optional[str]:
         """Extract video title from HTML"""
@@ -264,6 +326,28 @@ class CaptionScraper:
             all_matches.extend([self._clean_text(text) for text in matches])
         
         return ' '.join(all_matches)
+
+    def _parse_vtt_captions(self, vtt_content: str) -> str:
+        """Parse WebVTT caption format"""
+        lines = vtt_content.split('\n')
+        text_lines = []
+        
+        for line in lines:
+            line = line.strip()
+            # Skip VTT headers, timestamps, and empty lines
+            if (not line or 
+                line.startswith('WEBVTT') or 
+                '-->' in line or 
+                line.isdigit() or
+                line.startswith('NOTE')):
+                continue
+            
+            # Clean the text line
+            cleaned = self._clean_text(line)
+            if cleaned and len(cleaned) > 1:
+                text_lines.append(cleaned)
+        
+        return ' '.join(text_lines)
 
     def _clean_text(self, text: str) -> str:
         """Clean and normalize text"""
