@@ -88,7 +88,7 @@ def extract_context_snippets(text, search_query, context_length=150):
     return snippets[:5]  # Return top 5 unique snippets
 
 def main():
-    st.title("Coffee with Scott Adams - Transcript Extractor & Enhancer")
+    st.title("CWSA Transcript Extractor & Search")
     st.markdown("---")
     
     # Initialize components
@@ -526,7 +526,7 @@ def main():
     
     # Footer
     st.markdown("---")
-    st.markdown("*Built with Streamlit for Coffee with Scott Adams podcast transcript management*")
+    st.markdown("*Built with Streamlit by Gadsdencode in honor of Scott Adams and his enormous impact on my life. Hopefully this boosts his immortality signal a bit more.")
 
 if __name__ == "__main__":
     main()
