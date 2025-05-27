@@ -60,7 +60,17 @@ class YouTubeHandler:
             }
             
         except Exception as e:
-            print(f"Error extracting transcript for video {video_id}: {str(e)}")
+            error_msg = str(e)
+            print(f"Error extracting transcript for video {video_id}: {error_msg}")
+            
+            # Check for specific YouTube blocking errors
+            if "IP belonging to a cloud provider" in error_msg:
+                raise Exception("YouTube is temporarily blocking requests from this cloud environment. This is common but usually resolves quickly. You can try again in a few minutes, or try a different video.")
+            elif "blocked" in error_msg.lower():
+                raise Exception("YouTube has temporarily blocked access to captions. Try again in a few minutes or try the Audio-Based extraction method.")
+            else:
+                raise Exception(f"Caption extraction failed: {error_msg}")
+            
             return None
 
     def extract_transcript_from_audio(self, video_id: str, progress_callback=None, quality_level="Fast") -> Optional[Dict]:
@@ -77,7 +87,7 @@ class YouTubeHandler:
             if progress_callback:
                 progress_callback("Downloading audio from YouTube...")
             
-            # Download audio using yt-dlp with optimized settings
+            # Download audio using yt-dlp with optimized settings and bot bypass
             ydl_opts = {
                 'format': 'worstaudio/worst',  # Use lower quality for faster processing
                 'outtmpl': os.path.join(temp_dir, f"{video_id}.%(ext)s"),
@@ -86,6 +96,19 @@ class YouTubeHandler:
                 'audioquality': '9',   # Lower quality for speed
                 'quiet': True,
                 'no_warnings': True,
+                # Add headers to appear more like a regular browser
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'en-us,en;q=0.5',
+                    'Accept-Encoding': 'gzip,deflate',
+                    'Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.7',
+                    'Keep-Alive': '300',
+                    'Connection': 'keep-alive',
+                },
+                # Try to bypass age restrictions
+                'age_limit': None,
+                'skip_download': False,
             }
             
             url = f"https://www.youtube.com/watch?v={video_id}"
@@ -182,7 +205,17 @@ class YouTubeHandler:
             }
             
         except Exception as e:
-            print(f"Error extracting transcript from audio for video {video_id}: {str(e)}")
+            error_msg = str(e)
+            print(f"Error extracting transcript from audio for video {video_id}: {error_msg}")
+            
+            # Check for specific YouTube blocking errors
+            if "Sign in to confirm you're not a bot" in error_msg:
+                raise Exception("YouTube is blocking audio downloads from this environment. This is common on cloud platforms. Try using the Caption-Based extraction method instead, which often works better.")
+            elif "blocked" in error_msg.lower() or "forbidden" in error_msg.lower():
+                raise Exception("YouTube has blocked access to this video's audio. Try using the Caption-Based extraction method instead.")
+            else:
+                raise Exception(f"Audio extraction failed: {error_msg}")
+            
             return None
         finally:
             # Clean up temporary files

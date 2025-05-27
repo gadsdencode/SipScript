@@ -131,6 +131,7 @@ def main():
         )
         
         # Show quality options for audio-based extraction
+        quality_level = "Fast"  # Default value
         if "Audio-Based" in extraction_method:
             st.info("💡 **Tip:** Audio extraction takes longer but works when captions aren't available. Processing time: 2-5 minutes for typical episodes.")
             
