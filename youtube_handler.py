@@ -465,3 +465,107 @@ class YouTubeHandler:
         text = re.sub(r'\s+', ' ', text)
         
         return text.strip()
+
+    def extract_transcript_with_api(self, video_id: str) -> Optional[Dict]:
+        """
+        Extract transcript using authenticated YouTube Data API
+        This bypasses IP blocking by using official API access
+        """
+        try:
+            if not self.youtube_api:
+                raise Exception("YouTube API not initialized. API key required.")
+            
+            # Get video metadata first
+            metadata = self._get_video_metadata_with_api(video_id)
+            
+            # Get list of available captions
+            captions_request = self.youtube_api.captions().list(
+                part="snippet",
+                videoId=video_id
+            )
+            captions_response = captions_request.execute()
+            
+            if not captions_response.get('items'):
+                raise Exception("No captions available for this video")
+            
+            # Find English captions (prefer manually created over auto-generated)
+            english_caption = None
+            for caption in captions_response['items']:
+                lang = caption['snippet']['language']
+                track_kind = caption['snippet'].get('trackKind', 'standard')
+                
+                if lang in ['en', 'en-US', 'en-GB']:
+                    if track_kind == 'standard':  # Manually created captions
+                        english_caption = caption
+                        break
+                    elif english_caption is None:  # Auto-generated as fallback
+                        english_caption = caption
+            
+            if not english_caption:
+                raise Exception("No English captions found for this video")
+            
+            # Download the caption content
+            caption_id = english_caption['id']
+            download_request = self.youtube_api.captions().download(
+                id=caption_id,
+                tfmt='srt'  # SubRip format
+            )
+            
+            # Execute the download
+            caption_content = download_request.execute()
+            
+            if isinstance(caption_content, bytes):
+                caption_content = caption_content.decode('utf-8')
+            
+            # Parse SRT content to extract text
+            transcript_text = self._parse_srt_content(caption_content)
+            
+            if not transcript_text or len(transcript_text.strip()) < 50:
+                raise Exception("Generated transcript is too short or empty")
+            
+            return {
+                'transcript': transcript_text,
+                'title': metadata.get('title', f'Video {video_id}'),
+                'date': metadata.get('date', datetime.now().strftime('%Y-%m-%d')),
+                'duration': metadata.get('duration'),
+                'channel': metadata.get('channel'),
+                'video_id': video_id,
+                'extraction_method': 'api_captions'
+            }
+            
+        except Exception as e:
+            print(f"Error extracting transcript with API for video {video_id}: {str(e)}")
+            raise Exception(f"API caption extraction failed: {str(e)}")
+    
+    def _parse_srt_content(self, srt_content: str) -> str:
+        """Parse SRT subtitle content to extract plain text"""
+        import re
+        
+        lines = srt_content.split('\n')
+        text_lines = []
+        
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+            
+            # Skip sequence numbers and timestamp lines
+            if line.isdigit() or '-->' in line or not line:
+                i += 1
+                continue
+            
+            # Clean subtitle text
+            cleaned_line = re.sub(r'<[^>]+>', '', line)  # Remove HTML tags
+            cleaned_line = re.sub(r'\[.*?\]', '', cleaned_line)  # Remove bracketed content
+            cleaned_line = cleaned_line.strip()
+            
+            if cleaned_line:
+                text_lines.append(cleaned_line)
+            
+            i += 1
+        
+        # Join and clean up text
+        full_text = ' '.join(text_lines)
+        full_text = re.sub(r'\s+', ' ', full_text)
+        full_text = re.sub(r'([.!?])\s*([A-Z])', r'\1 \2', full_text)
+        
+        return full_text.strip()
