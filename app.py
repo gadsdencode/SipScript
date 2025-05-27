@@ -3,6 +3,7 @@ import pandas as pd
 import re
 import csv
 import io
+import sqlite3
 from datetime import datetime
 from database import DatabaseManager
 from youtube_handler import YouTubeHandler
@@ -805,6 +806,40 @@ def main():
     elif page == "Database Management":
         st.header("Database Management")
         
+        # Check if admin is authenticated
+        if not st.session_state.get("is_admin", False):
+            st.warning("This page requires admin authentication")
+            
+            # Create login form
+            with st.form("admin_login_form"):
+                st.subheader("Admin Login")
+                admin_email = st.text_input("Email", key="admin_email_input")
+                admin_password = st.text_input("Password", type="password", key="admin_password_input")
+                submit_button = st.form_submit_button("Login")
+                
+                if submit_button:
+                    if db.authenticate_admin(admin_email, admin_password):
+                        st.session_state["is_admin"] = True
+                        st.session_state["admin_email"] = admin_email
+                        st.success("Login successful!")
+                        st.rerun()
+                    else:
+                        st.error("Invalid email or password")
+            
+            # Stop rendering the rest of the page if not authenticated
+            return
+        
+        # Show logout button if authenticated
+        if st.sidebar.button("Admin Logout"):
+            if "is_admin" in st.session_state:
+                del st.session_state["is_admin"]
+            if "admin_email" in st.session_state:
+                del st.session_state["admin_email"]
+            st.sidebar.success("Logged out successfully")
+            st.rerun()
+        
+        st.sidebar.success(f"Logged in as {st.session_state.get('admin_email', 'admin')}")
+        
         # Database Statistics
         total_episodes = db.get_episode_count()
         all_episodes = db.get_all_episodes()
@@ -1042,50 +1077,130 @@ def main():
         with tab3:
             st.subheader("Database Info")
             
-            # Show database file info
-            import os
-            db_path = db.db_path
-            if os.path.exists(db_path):
-                file_size = os.path.getsize(db_path)
-                st.write(f"**Database file:** {db_path}")
-                st.write(f"**File size:** {file_size / 1024:.2f} KB")
-                st.write(f"**Total episodes:** {total_episodes}")
+            # Create tabs for database info and admin management
+            db_info_tab, admin_tab = st.tabs(["Database Info", "Admin Management"])
             
-            # Export functionality
-            st.markdown("**Export Data:**")
-            
-            if all_episodes:
-                export_format = st.selectbox(
-                    "Select export format:",
-                    ["CSV", "JSON"],
-                    key="export_format"
-                )
+            with db_info_tab:
+                # Show database file info
+                import os
+                db_path = db.db_path
+                if os.path.exists(db_path):
+                    file_size = os.path.getsize(db_path)
+                    st.write(f"**Database file:** {db_path}")
+                    st.write(f"**File size:** {file_size / 1024:.2f} KB")
+                    st.write(f"**Total episodes:** {total_episodes}")
                 
-                if st.button("Export All Episodes", key="export_button"):
-                    df = pd.DataFrame(all_episodes)
+                # Export functionality
+                st.markdown("**Export Data:**")
+                
+                if all_episodes:
+                    export_format = st.selectbox(
+                        "Select export format:",
+                        ["CSV", "JSON"],
+                        key="export_format"
+                    )
                     
-                    if export_format == "CSV":
-                        # Prepare CSV file for download
-                        csv_data = df[['id', 'title', 'date', 'url', 'video_id']].to_csv(index=False)
+                    if st.button("Export All Episodes", key="export_button"):
+                        df = pd.DataFrame(all_episodes)
                         
-                        st.download_button(
-                            label="Download CSV",
-                            data=csv_data,
-                            file_name="cwsa_episodes.csv",
-                            mime="text/csv"
-                        )
-                    else:
-                        # Prepare JSON file for download
-                        json_data = df[['id', 'title', 'date', 'url', 'video_id']].to_json(orient="records")
+                        if export_format == "CSV":
+                            # Prepare CSV file for download
+                            csv_data = df[['id', 'title', 'date', 'url', 'video_id']].to_csv(index=False)
+                            
+                            st.download_button(
+                                label="Download CSV",
+                                data=csv_data,
+                                file_name="cwsa_episodes.csv",
+                                mime="text/csv"
+                            )
+                        else:
+                            # Prepare JSON file for download
+                            json_data = df[['id', 'title', 'date', 'url', 'video_id']].to_json(orient="records")
+                            
+                            st.download_button(
+                                label="Download JSON",
+                                data=json_data,
+                                file_name="cwsa_episodes.json",
+                                mime="application/json"
+                            )
+                else:
+                    st.info("No episodes to export.")
+            
+            with admin_tab:
+                st.subheader("Admin User Management")
+                
+                # Get admin users
+                admin_users = db.get_admin_users()
+                
+                if admin_users:
+                    st.write("**Current Admin Users:**")
+                    
+                    for user in admin_users:
+                        st.markdown(f"🔑 **{user['email']}** (ID: {user['id']})")
+                
+                # Add form to create new admin user
+                st.write("**Add New Admin User:**")
+                
+                with st.form("add_admin_form"):
+                    new_admin_email = st.text_input("Email", key="new_admin_email")
+                    new_admin_password = st.text_input("Password", type="password", key="new_admin_password")
+                    confirm_password = st.text_input("Confirm Password", type="password", key="confirm_admin_password")
+                    
+                    submit_button = st.form_submit_button("Add Admin User")
+                    
+                    if submit_button:
+                        if not new_admin_email or not new_admin_password:
+                            st.error("Email and password are required")
+                        elif new_admin_password != confirm_password:
+                            st.error("Passwords do not match")
+                        else:
+                            # Add admin user to database
+                            try:
+                                db._create_admin_user(new_admin_email, new_admin_password)
+                                st.success(f"Admin user {new_admin_email} added successfully")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error adding admin user: {str(e)}")
+                
+                # Change own password
+                st.write("**Change Your Password:**")
+                
+                with st.form("change_password_form"):
+                    current_password = st.text_input("Current Password", type="password", key="current_password")
+                    new_password = st.text_input("New Password", type="password", key="new_password")
+                    confirm_new_password = st.text_input("Confirm New Password", type="password", key="confirm_new_password")
+                    
+                    submit_button = st.form_submit_button("Change Password")
+                    
+                    if submit_button:
+                        admin_email = st.session_state.get("admin_email")
                         
-                        st.download_button(
-                            label="Download JSON",
-                            data=json_data,
-                            file_name="cwsa_episodes.json",
-                            mime="application/json"
-                        )
-            else:
-                st.info("No episodes to export.")
+                        if not admin_email:
+                            st.error("Admin email not found in session")
+                        elif not current_password or not new_password:
+                            st.error("All fields are required")
+                        elif new_password != confirm_new_password:
+                            st.error("New passwords do not match")
+                        else:
+                            # Verify current password
+                            if db.authenticate_admin(admin_email, current_password):
+                                try:
+                                    # Update admin password
+                                    with sqlite3.connect(db.db_path) as conn:
+                                        cursor = conn.cursor()
+                                        new_password_hash = db._hash_password(new_password)
+                                        cursor.execute("""
+                                            UPDATE admin_users 
+                                            SET password_hash = ?
+                                            WHERE email = ?
+                                        """, (new_password_hash, admin_email))
+                                        conn.commit()
+                                    
+                                    st.success("Password changed successfully")
+                                except Exception as e:
+                                    st.error(f"Error changing password: {str(e)}")
+                            else:
+                                st.error("Current password is incorrect")
 
 if __name__ == "__main__":
     main()

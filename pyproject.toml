@@ -15,4 +15,5 @@ dependencies = [
     "google-api-python-client>=2.170.0",
     "whisper>=1.1.10",
     "trafilatura>=2.0.0",
+    "python-dotenv>=1.0.0",
 ]
