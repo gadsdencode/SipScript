@@ -9,12 +9,14 @@ import yt_dlp
 import whisper
 from pydub import AudioSegment
 from googleapiclient.discovery import build
+from caption_scraper import CaptionScraper
 
 class YouTubeHandler:
     def __init__(self):
         """Initialize YouTube handler"""
         self.whisper_model = None  # Load model only when needed to save memory
         self.youtube_api = None
+        self.caption_scraper = CaptionScraper()
         self._init_youtube_api()
     
     def _init_youtube_api(self):
@@ -129,11 +131,14 @@ class YouTubeHandler:
             error_msg = str(e)
             print(f"Error extracting transcript for video {video_id}: {error_msg}")
             
-            # Check for specific YouTube blocking errors
-            if "IP belonging to a cloud provider" in error_msg:
-                raise Exception("YouTube is temporarily blocking requests from this cloud environment. This is common but usually resolves quickly. You can try again in a few minutes, or try a different video.")
-            elif "blocked" in error_msg.lower():
-                raise Exception("YouTube has temporarily blocked access to captions. Try again in a few minutes or try the Audio-Based extraction method.")
+            # Check for specific YouTube blocking errors and try web scraping fallback
+            if "IP belonging to a cloud provider" in error_msg or "blocked" in error_msg.lower():
+                print("API blocked, trying web scraping method...")
+                try:
+                    return self.caption_scraper.extract_captions_from_page(video_id)
+                except Exception as scrape_error:
+                    print(f"Web scraping also failed: {scrape_error}")
+                    raise Exception("Both API and web scraping methods failed. Try the Audio-Based extraction method.")
             else:
                 raise Exception(f"Caption extraction failed: {error_msg}")
             
@@ -575,3 +580,14 @@ class YouTubeHandler:
         full_text = re.sub(r'([.!?])\s*([A-Z])', r'\1 \2', full_text)
         
         return full_text.strip()
+
+    def extract_transcript_web_scraping(self, video_id: str) -> Optional[Dict]:
+        """
+        Extract transcript using web scraping - bypasses all API restrictions
+        This method directly scrapes YouTube's web page for caption data
+        """
+        try:
+            return self.caption_scraper.extract_captions_from_page(video_id)
+        except Exception as e:
+            print(f"Error with web scraping extraction for video {video_id}: {str(e)}")
+            raise Exception(f"Web scraping extraction failed: {str(e)}")
