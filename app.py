@@ -1102,12 +1102,16 @@ def render_database_management_page(db, transcript_processor):
                         # Prepare JSON file for download
                         json_data = df[['id', 'title', 'date', 'url', 'video_id']].to_json(orient="records")
                         
-                        st.download_button(
-                            label="Download JSON",
-                            data=json_data,
-                            file_name="cwsa_episodes.json",
-                            mime="application/json"
-                        )
+                        # Ensure json_data is not None before passing to download_button
+                        if json_data:
+                            st.download_button(
+                                label="Download JSON",
+                                data=json_data,
+                                file_name="cwsa_episodes.json",
+                                mime="application/json"
+                            )
+                        else:
+                            st.error("Failed to generate JSON export")
             else:
                 st.info("No episodes to export.")
         
