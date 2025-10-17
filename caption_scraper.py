@@ -1,8 +1,18 @@
 import re
 import requests
 import json
+import logging
 from urllib.parse import unquote
 from typing import Optional, Dict
+from errors import (
+    CaptionScrapeError,
+    NetworkError,
+    ValidationError,
+    AuthenticationError
+)
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 class CaptionScraper:
     def __init__(self):
@@ -26,7 +36,11 @@ class CaptionScraper:
                 caption_text = self._try_transcript_page_scraping(video_id)
             
             if not caption_text or len(caption_text.strip()) < 50:
-                return None
+                raise CaptionScrapeError(
+                    message="Caption text is too short or empty",
+                    video_id=video_id,
+                    url=f"https://www.youtube.com/watch?v={video_id}"
+                )
             
             # Get basic metadata
             title, upload_date, channel = self._get_basic_metadata(video_id)
@@ -40,14 +54,21 @@ class CaptionScraper:
                 'extraction_method': 'web_scraping'
             }
             
+        except (CaptionScrapeError, AuthenticationError, NetworkError):
+            # Re-raise our custom exceptions
+            raise
         except Exception as e:
-            print(f"Error scraping captions for {video_id}: {e}")
-            return None
+            logger.error(f"Unexpected error scraping captions for {video_id}: {e}")
+            raise CaptionScrapeError(
+                message=f"Failed to scrape captions: {str(e)}",
+                video_id=video_id,
+                cause=e
+            ) from e
 
     def _try_direct_timedtext_api(self, video_id: str) -> Optional[str]:
         """Try using youtube-transcript-api with authentication"""
         try:
-            from youtube_transcript_api import YouTubeTranscriptApi
+            from youtube_transcript_api._api import YouTubeTranscriptApi
             import os
             
             # Check if we have YouTube cookies for authentication
@@ -70,13 +91,18 @@ class CaptionScraper:
                 return self._clean_text(full_text)
                 
         except ImportError:
-            print("youtube-transcript-api not available")
+            logger.warning("youtube-transcript-api not available")
         except Exception as e:
-            if "IP" in str(e) or "blocked" in str(e).lower():
-                print(f"YouTube is blocking requests from this server. Authentication needed: {e}")
-                return "AUTH_REQUIRED"
+            error_msg = str(e)
+            if "IP" in error_msg or "blocked" in error_msg.lower():
+                logger.warning(f"YouTube is blocking requests from this server for video {video_id}")
+                raise AuthenticationError(
+                    message="YouTube is blocking requests from this server",
+                    service="YouTube",
+                    cause=e
+                )
             else:
-                print(f"YouTube Transcript API failed: {e}")
+                logger.error(f"YouTube Transcript API failed for video {video_id}: {e}")
             
         return None
 
@@ -86,14 +112,38 @@ class CaptionScraper:
             url = f"https://www.youtube.com/watch?v={video_id}"
             response = self.session.get(url, timeout=15)
             
-            if response.status_code != 200:
+            if response.status_code == 404:
+                raise CaptionScrapeError(
+                    message=f"Video not found: {video_id}",
+                    video_id=video_id,
+                    url=url,
+                    status_code=404
+                )
+            elif response.status_code == 403:
+                raise CaptionScrapeError(
+                    message=f"Access denied for video: {video_id}",
+                    video_id=video_id,
+                    url=url,
+                    status_code=403
+                )
+            elif response.status_code != 200:
+                logger.warning(f"Unexpected status code {response.status_code} for video {video_id}")
                 return None
             
             html_content = response.text
             return self._extract_caption_data(html_content)
             
+        except requests.RequestException as e:
+            logger.error(f"Network error during page scraping for video {video_id}: {e}")
+            raise NetworkError(
+                message=f"Failed to fetch YouTube page: {str(e)}",
+                url=f"https://www.youtube.com/watch?v={video_id}",
+                cause=e
+            ) from e
+        except CaptionScrapeError:
+            raise  # Re-raise our custom exceptions
         except Exception as e:
-            print(f"Page scraping failed: {e}")
+            logger.error(f"Page scraping failed for video {video_id}: {e}")
             return None
 
     def _get_basic_metadata(self, video_id: str) -> tuple:
@@ -108,8 +158,10 @@ class CaptionScraper:
                 date = self._extract_upload_date(html)
                 channel = self._extract_channel(html)
                 return title, date, channel
-        except:
-            pass
+        except requests.RequestException as e:
+            logger.warning(f"Failed to get metadata for video {video_id}: {e}")
+        except Exception as e:
+            logger.warning(f"Unexpected error getting metadata for video {video_id}: {e}")
         
         return None, None, None
 
@@ -197,8 +249,8 @@ class CaptionScraper:
                         if caption_text and len(caption_text.strip()) > 100:
                             return caption_text
                 
-                except json.JSONDecodeError:
-                    print("Failed to parse player config JSON")
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Failed to parse player config JSON: {e}")
             
             # Fallback: Look for caption tracks in a simpler pattern
             caption_url_pattern = r'"baseUrl":"([^"]*transcript[^"]*)"'
@@ -228,7 +280,7 @@ class CaptionScraper:
             return None
             
         except Exception as e:
-            print(f"Error extracting caption data: {e}")
+            logger.error(f"Error extracting caption data: {e}")
             return None
 
     def _download_caption_file(self, url: str) -> Optional[str]:
@@ -250,8 +302,15 @@ class CaptionScraper:
                 else:  # Plain text
                     return self._clean_text(content)
             
+        except requests.RequestException as e:
+            logger.error(f"Network error downloading caption file: {e}")
+            raise NetworkError(
+                message=f"Failed to download caption file: {str(e)}",
+                url=url,
+                cause=e
+            ) from e
         except Exception as e:
-            print(f"Error downloading caption file: {e}")
+            logger.error(f"Error downloading caption file: {e}")
         
         return None
 

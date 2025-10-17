@@ -1,15 +1,28 @@
 import re
 import os
 import tempfile
+import logging
 from datetime import datetime
 from typing import Optional, Dict
-from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api._api import YouTubeTranscriptApi
 import requests
 import yt_dlp
+from yt_dlp.utils import DownloadError
 import whisper
 from pydub import AudioSegment
+from pydub.exceptions import CouldntDecodeError
 from googleapiclient.discovery import build
 from caption_scraper import CaptionScraper
+from errors import (
+    YouTubeAPIError,
+    TranscriptionError,
+    ValidationError,
+    AuthenticationError,
+    NetworkError
+)
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 class YouTubeHandler:
     def __init__(self):
@@ -25,11 +38,12 @@ class YouTubeHandler:
             api_key = os.getenv('YOUTUBE_API_KEY')
             if api_key:
                 self.youtube_api = build('youtube', 'v3', developerKey=api_key)
-                print("YouTube API initialized successfully with authentication")
+                logger.info("YouTube API initialized successfully with authentication")
             else:
-                print("YouTube API key not found, using fallback methods")
+                logger.warning("YouTube API key not found, using fallback methods")
         except Exception as e:
-            print(f"Failed to initialize YouTube API: {e}")
+            logger.error(f"Failed to initialize YouTube API: {e}")
+            # Don't raise here as we have fallback methods
     
     def _get_video_metadata_with_api(self, video_id: str) -> Dict:
         """Get video metadata using authenticated YouTube Data API"""
@@ -62,7 +76,7 @@ class YouTubeHandler:
                     try:
                         date_obj = datetime.fromisoformat(upload_date.replace('Z', '+00:00'))
                         formatted_date = date_obj.strftime('%Y-%m-%d')
-                    except:
+                    except ValueError:
                         formatted_date = datetime.now().strftime('%Y-%m-%d')
                     
                     return {
@@ -72,7 +86,7 @@ class YouTubeHandler:
                         'duration': duration
                     }
         except Exception as e:
-            print(f"API metadata extraction failed: {e}")
+            logger.warning(f"API metadata extraction failed for video {video_id}: {e}")
         
         # Fallback metadata
         return {
@@ -113,7 +127,12 @@ class YouTubeHandler:
             full_transcript = self._combine_transcript_segments(transcript_list)
             
             if not full_transcript or len(full_transcript.strip()) < 50:
-                raise ValueError("Transcript is too short or empty")
+                raise ValidationError(
+                    message="Transcript is too short or empty",
+                    field="transcript",
+                    value=len(full_transcript.strip()) if full_transcript else 0,
+                    requirement="Transcript must be at least 50 characters"
+                )
             
             # Get video metadata
             metadata = self._get_video_metadata(video_id)
@@ -127,22 +146,36 @@ class YouTubeHandler:
                 'video_id': video_id
             }
             
+        except ValidationError:
+            raise  # Re-raise validation errors as-is
         except Exception as e:
             error_msg = str(e)
-            print(f"Error extracting transcript for video {video_id}: {error_msg}")
+            logger.error(f"Error extracting transcript for video {video_id}: {error_msg}")
             
             # Check for specific YouTube blocking errors and try web scraping fallback
-            if "IP belonging to a cloud provider" in error_msg or "blocked" in error_msg.lower():
-                print("API blocked, trying web scraping method...")
+            is_blocking = "IP belonging to a cloud provider" in error_msg or "blocked" in error_msg.lower()
+            
+            if is_blocking:
+                logger.info("API blocked, trying web scraping method...")
                 try:
                     return self.caption_scraper.extract_captions_from_page(video_id)
                 except Exception as scrape_error:
-                    print(f"Web scraping also failed: {scrape_error}")
-                    raise Exception("Both API and web scraping methods failed. Try the Audio-Based extraction method.")
+                    logger.error(f"Web scraping also failed: {scrape_error}")
+                    raise YouTubeAPIError(
+                        message="Both API and web scraping methods failed",
+                        video_id=video_id,
+                        operation="extract_transcript",
+                        is_blocking=True,
+                        cause=scrape_error
+                    ) from scrape_error
             else:
-                raise Exception(f"Caption extraction failed: {error_msg}")
-            
-            return None
+                raise YouTubeAPIError(
+                    message=f"Caption extraction failed: {error_msg}",
+                    video_id=video_id,
+                    operation="extract_transcript",
+                    is_blocking=False,
+                    cause=e
+                ) from e
 
     def extract_transcript_from_audio(self, video_id: str, progress_callback=None, quality_level="Fast") -> Optional[Dict]:
         """
@@ -281,27 +314,65 @@ class YouTubeHandler:
                 'extraction_method': 'audio'  # Mark this as audio-extracted
             }
             
-        except Exception as e:
+        except DownloadError as e:
             error_msg = str(e)
-            print(f"Error extracting transcript from audio for video {video_id}: {error_msg}")
+            logger.error(f"yt-dlp download error for video {video_id}: {error_msg}")
             
             # Check for specific YouTube blocking errors
             if "Sign in to confirm you're not a bot" in error_msg:
-                raise Exception("YouTube is blocking audio downloads from this environment. This is common on cloud platforms. Try using the Caption-Based extraction method instead, which often works better.")
+                raise TranscriptionError(
+                    message="YouTube is blocking audio downloads from this environment",
+                    video_id=video_id,
+                    stage="download",
+                    is_download_error=True,
+                    cause=e
+                ) from e
             elif "blocked" in error_msg.lower() or "forbidden" in error_msg.lower():
-                raise Exception("YouTube has blocked access to this video's audio. Try using the Caption-Based extraction method instead.")
+                raise TranscriptionError(
+                    message="YouTube has blocked access to this video's audio",
+                    video_id=video_id,
+                    stage="download",
+                    is_download_error=True,
+                    cause=e
+                ) from e
             else:
-                raise Exception(f"Audio extraction failed: {error_msg}")
+                raise TranscriptionError(
+                    message=f"Failed to download audio: {error_msg}",
+                    video_id=video_id,
+                    stage="download",
+                    is_download_error=True,
+                    cause=e
+                ) from e
+                
+        except CouldntDecodeError as e:
+            logger.error(f"Audio format conversion error for video {video_id}: {e}")
+            raise TranscriptionError(
+                message=f"Failed to convert audio format: {str(e)}",
+                video_id=video_id,
+                stage="convert",
+                is_download_error=False,
+                is_whisper_error=False,
+                cause=e
+            ) from e
             
-            return None
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Unexpected error extracting transcript from audio for video {video_id}: {error_msg}")
+            raise TranscriptionError(
+                message=f"Audio extraction failed: {error_msg}",
+                video_id=video_id,
+                stage="unknown",
+                cause=e
+            ) from e
+            
         finally:
             # Clean up temporary files
             if temp_dir and os.path.exists(temp_dir):
                 import shutil
                 try:
                     shutil.rmtree(temp_dir)
-                except:
-                    pass  # Best effort cleanup
+                except Exception as cleanup_error:
+                    logger.warning(f"Failed to clean up temporary directory: {cleanup_error}")
     
     def _combine_transcript_segments(self, transcript_list: list) -> str:
         """Combine transcript segments into readable text"""
@@ -373,7 +444,7 @@ class YouTubeHandler:
                         # Parse ISO date format
                         date_obj = datetime.fromisoformat(upload_date.replace('Z', '+00:00'))
                         date = date_obj.strftime('%Y-%m-%d')
-                    except:
+                    except ValueError:
                         date = datetime.now().strftime('%Y-%m-%d')
                 else:
                     date = datetime.now().strftime('%Y-%m-%d')
@@ -388,9 +459,16 @@ class YouTubeHandler:
                     'channel': channel,
                     'duration': None  # Would need YouTube Data API for accurate duration
                 }
-                
+            elif response.status_code == 404:
+                raise YouTubeAPIError(
+                    message=f"Video not found: {video_id}",
+                    video_id=video_id,
+                    operation="_get_video_metadata"
+                )
+        except requests.RequestException as e:
+            logger.warning(f"Network error extracting metadata for video {video_id}: {e}")
         except Exception as e:
-            print(f"Warning: Could not extract metadata for video {video_id}: {str(e)}")
+            logger.warning(f"Could not extract metadata for video {video_id}: {e}")
         
         # Fallback metadata
         return {
@@ -427,7 +505,7 @@ class YouTubeHandler:
             return any(keyword in title or keyword in channel for keyword in scott_keywords)
             
         except Exception as e:
-            print(f"Warning: Could not validate video {video_id}: {str(e)}")
+            logger.warning(f"Could not validate video {video_id}: {e}")
             return True  # Default to allowing the video
     
     def get_available_transcript_languages(self, video_id: str) -> list:
@@ -447,7 +525,7 @@ class YouTubeHandler:
             return languages
             
         except Exception as e:
-            print(f"Error getting transcript languages for {video_id}: {str(e)}")
+            logger.error(f"Error getting transcript languages for {video_id}: {e}")
             return []
 
     def _clean_whisper_transcript(self, text: str) -> str:
@@ -484,7 +562,11 @@ class YouTubeHandler:
         """
         try:
             if not self.youtube_api:
-                raise Exception("YouTube API not initialized. API key required.")
+                raise AuthenticationError(
+                    message="YouTube API not initialized. API key required.",
+                    service="YouTube",
+                    is_missing_key=True
+                )
             
             # Get video metadata first
             metadata = self._get_video_metadata_with_api(video_id)
@@ -497,7 +579,11 @@ class YouTubeHandler:
             captions_response = captions_request.execute()
             
             if not captions_response.get('items'):
-                raise Exception("No captions available for this video")
+                raise YouTubeAPIError(
+                    message="No captions available for this video",
+                    video_id=video_id,
+                    operation="extract_transcript_with_api"
+                )
             
             # Find English captions (prefer manually created over auto-generated)
             english_caption = None
@@ -513,7 +599,11 @@ class YouTubeHandler:
                         english_caption = caption
             
             if not english_caption:
-                raise Exception("No English captions found for this video")
+                raise YouTubeAPIError(
+                    message="No English captions found for this video",
+                    video_id=video_id,
+                    operation="extract_transcript_with_api"
+                )
             
             # Download the caption content
             caption_id = english_caption['id']
@@ -532,7 +622,12 @@ class YouTubeHandler:
             transcript_text = self._parse_srt_content(caption_content)
             
             if not transcript_text or len(transcript_text.strip()) < 50:
-                raise Exception("Generated transcript is too short or empty")
+                raise ValidationError(
+                    message="Generated transcript is too short or empty",
+                    field="transcript",
+                    value=len(transcript_text.strip()) if transcript_text else 0,
+                    requirement="Transcript must be at least 50 characters"
+                )
             
             return {
                 'transcript': transcript_text,
@@ -544,9 +639,16 @@ class YouTubeHandler:
                 'extraction_method': 'api_captions'
             }
             
+        except (AuthenticationError, YouTubeAPIError, ValidationError):
+            raise  # Re-raise our custom exceptions
         except Exception as e:
-            print(f"Error extracting transcript with API for video {video_id}: {str(e)}")
-            raise Exception(f"API caption extraction failed: {str(e)}")
+            logger.error(f"Error extracting transcript with API for video {video_id}: {e}")
+            raise YouTubeAPIError(
+                message=f"API caption extraction failed: {str(e)}",
+                video_id=video_id,
+                operation="extract_transcript_with_api",
+                cause=e
+            ) from e
     
     def _parse_srt_content(self, srt_content: str) -> str:
         """Parse SRT subtitle content to extract plain text"""
@@ -589,5 +691,10 @@ class YouTubeHandler:
         try:
             return self.caption_scraper.extract_captions_from_page(video_id)
         except Exception as e:
-            print(f"Error with web scraping extraction for video {video_id}: {str(e)}")
-            raise Exception(f"Web scraping extraction failed: {str(e)}")
+            logger.error(f"Error with web scraping extraction for video {video_id}: {e}")
+            raise YouTubeAPIError(
+                message=f"Web scraping extraction failed: {str(e)}",
+                video_id=video_id,
+                operation="extract_transcript_web_scraping",
+                cause=e
+            ) from e

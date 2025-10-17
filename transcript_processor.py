@@ -1,7 +1,17 @@
 import os
 import re
+import logging
+import json
 from typing import Optional, Dict, Union, List
 from openai import OpenAI
+from errors import (
+    ProcessingError,
+    ValidationError,
+    AuthenticationError
+)
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 class TranscriptProcessor:
     def __init__(self, api_key=None):
@@ -12,8 +22,8 @@ class TranscriptProcessor:
         else:
             api_key = os.getenv("OPENAI_API_KEY")
             if not api_key:
-                print("Warning: No OpenAI API key provided or found in environment variables.")
-                print("AI-powered features will not work correctly.")
+                logger.warning("No OpenAI API key provided or found in environment variables.")
+                logger.warning("AI-powered features will not work correctly.")
             self.client = OpenAI(api_key=api_key)
     
     def enhance_transcript(self, raw_transcript: str) -> str:
@@ -22,20 +32,41 @@ class TranscriptProcessor:
         Clean up grammar, punctuation, and improve readability
         """
         if not raw_transcript or not raw_transcript.strip():
-            raise ValueError("Raw transcript is empty or invalid")
+            raise ValidationError(
+                message="Raw transcript is empty or invalid",
+                field="raw_transcript",
+                requirement="Transcript must not be empty"
+            )
+        
+        # Check if we have OpenAI API key before attempting processing
+        if not self.client.api_key:
+            raise AuthenticationError(
+                message="OpenAI API key is not configured",
+                service="OpenAI",
+                is_missing_key=True
+            )
         
         # Split long transcripts into chunks to avoid token limits
         chunks = self._split_transcript(raw_transcript)
         enhanced_chunks = []
         
-        for chunk in chunks:
+        for i, chunk in enumerate(chunks):
             try:
                 enhanced_chunk = self._process_chunk(chunk)
                 enhanced_chunks.append(enhanced_chunk)
+            except (ProcessingError, AuthenticationError):
+                # Re-raise our custom exceptions - don't silently fallback
+                raise
             except Exception as e:
-                # If processing fails, use the original chunk
-                print(f"Warning: Failed to enhance chunk: {str(e)}")
-                enhanced_chunks.append(chunk)
+                # For unexpected errors, wrap them in ProcessingError
+                logger.error(f"Unexpected error enhancing chunk {i+1}/{len(chunks)}: {e}")
+                raise ProcessingError(
+                    message=f"Failed to enhance transcript chunk {i+1}",
+                    operation="enhance",
+                    chunk_index=i,
+                    is_api_error=True,
+                    cause=e
+                ) from e
         
         return "\n\n".join(enhanced_chunks)
     
@@ -96,6 +127,13 @@ Important: Do not add, remove, or change the actual content or meaning. Only imp
 Transcript to clean:"""
 
         try:
+            if not self.client.api_key:
+                raise AuthenticationError(
+                    message="OpenAI API key is not configured",
+                    service="OpenAI",
+                    is_missing_key=True
+                )
+            
             # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
             # do not change this unless explicitly requested by the user
             response = self.client.chat.completions.create(
@@ -118,12 +156,31 @@ Transcript to clean:"""
             
             # Basic validation - ensure we got meaningful output
             if len(enhanced_text) < len(chunk) * 0.5:
-                raise ValueError("Enhanced text is suspiciously short")
+                raise ProcessingError(
+                    message="Enhanced text is suspiciously short",
+                    operation="enhance",
+                    is_api_error=False
+                )
             
             return enhanced_text
             
+        except AuthenticationError:
+            raise  # Re-raise authentication errors
+        except ProcessingError:
+            raise  # Re-raise our custom processing errors
         except Exception as e:
-            raise Exception(f"OpenAI API error: {str(e)}")
+            error_msg = str(e)
+            is_rate_limit = "rate" in error_msg.lower() or "limit" in error_msg.lower()
+            is_token_limit = "token" in error_msg.lower() or "length" in error_msg.lower()
+            
+            raise ProcessingError(
+                message=f"OpenAI API error: {error_msg}",
+                operation="enhance",
+                is_api_error=True,
+                is_rate_limit=is_rate_limit,
+                is_token_limit=is_token_limit,
+                cause=e
+            ) from e
     
     def extract_key_topics(self, transcript: str) -> Dict:
         """Extract key topics and themes from the transcript"""
@@ -146,6 +203,13 @@ Return your analysis as a JSON object with this structure:
 Focus on substantial topics and avoid minor tangents."""
 
         try:
+            if not self.client.api_key:
+                raise AuthenticationError(
+                    message="OpenAI API key is not configured",
+                    service="OpenAI",
+                    is_missing_key=True
+                )
+            
             # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
             # do not change this unless explicitly requested by the user
             response = self.client.chat.completions.create(
@@ -164,7 +228,6 @@ Focus on substantial topics and avoid minor tangents."""
                 temperature=0.3
             )
             
-            import json
             try:
                 result = json.loads(response.choices[0].message.content)
                 # Validate the result has the expected structure
@@ -178,15 +241,18 @@ Focus on substantial topics and avoid minor tangents."""
                 
                 return result
             except json.JSONDecodeError as e:
-                print(f"Warning: Failed to parse JSON response: {str(e)}")
+                logger.warning(f"Failed to parse JSON response from OpenAI: {e}")
                 return {
                     "topics": [],
                     "key_points": [],
                     "summary": "Failed to parse topic extraction results"
                 }
             
+        except AuthenticationError:
+            raise  # Re-raise authentication errors
         except Exception as e:
-            print(f"Warning: Failed to extract topics: {str(e)}")
+            logger.warning(f"Failed to extract topics: {e}")
+            # Don't raise for topic extraction failures - return default
             return {
                 "topics": [],
                 "key_points": [],
@@ -204,6 +270,13 @@ Focus on substantial topics and avoid minor tangents."""
         Transcript:"""
         
         try:
+            if not self.client.api_key:
+                raise AuthenticationError(
+                    message="OpenAI API key is not configured",
+                    service="OpenAI",
+                    is_missing_key=True
+                )
+            
             # the newest OpenAI model is "gpt-4o" which was released May 13, 2024.
             # do not change this unless explicitly requested by the user
             response = self.client.chat.completions.create(
@@ -224,5 +297,8 @@ Focus on substantial topics and avoid minor tangents."""
             
             return response.choices[0].message.content.strip()
             
+        except AuthenticationError:
+            raise  # Re-raise authentication errors
         except Exception as e:
+            logger.warning(f"Summary generation failed: {e}")
             return f"Summary generation failed: {str(e)}"

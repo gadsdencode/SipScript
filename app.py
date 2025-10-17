@@ -5,14 +5,34 @@ import csv
 import io
 import sqlite3
 import os
+import logging
 from datetime import datetime
 from dotenv import load_dotenv
 from database import DatabaseManager
 from youtube_handler import YouTubeHandler
 from transcript_processor import TranscriptProcessor
+from logging_config import setup_logging
+from errors import (
+    ApplicationError,
+    YouTubeAPIError,
+    TranscriptionError,
+    ProcessingError,
+    DatabaseError,
+    ValidationError,
+    AuthenticationError,
+    NetworkError,
+    CaptionScrapeError
+)
 
 # Load environment variables from .env file
 load_dotenv()
+
+# Set up logging
+if 'logging_configured' not in st.session_state:
+    setup_logging(log_level="INFO")
+    st.session_state['logging_configured'] = True
+
+logger = logging.getLogger(__name__)
 
 # Initialize components
 @st.cache_resource
@@ -227,9 +247,38 @@ def process_youtube_episode(youtube_url, extraction_method, quality_level,
         result["message"] = "Processing completed successfully"
         result["title"] = transcript_data['title']
         
+    except ValidationError as e:
+        logger.warning(f"Validation error processing video {video_id}: {e}")
+        result["message"] = "Invalid input"
+        result["error"] = e.user_message
+    except YouTubeAPIError as e:
+        logger.error(f"YouTube API error processing video {video_id}: {e}")
+        result["message"] = "YouTube access failed"
+        result["error"] = e.user_message
+    except TranscriptionError as e:
+        logger.error(f"Transcription error processing video {video_id}: {e}")
+        result["message"] = "Transcription failed"
+        result["error"] = e.user_message
+    except ProcessingError as e:
+        logger.error(f"Processing error for video {video_id}: {e}")
+        result["message"] = "AI processing failed"
+        result["error"] = e.user_message
+    except DatabaseError as e:
+        logger.error(f"Database error saving video {video_id}: {e}")
+        result["message"] = "Database save failed"
+        result["error"] = e.user_message
+    except AuthenticationError as e:
+        logger.error(f"Authentication error for video {video_id}: {e}")
+        result["message"] = "Authentication required"
+        result["error"] = e.user_message
+    except NetworkError as e:
+        logger.error(f"Network error for video {video_id}: {e}")
+        result["message"] = "Network connection failed"
+        result["error"] = e.user_message
     except Exception as e:
+        logger.critical(f"Unexpected error processing video {video_id}: {e}", exc_info=True)
         result["message"] = "Processing failed"
-        result["error"] = str(e)
+        result["error"] = "An unexpected error occurred. Please try again or contact support."
     
     return result
 
