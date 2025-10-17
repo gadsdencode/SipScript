@@ -495,6 +495,151 @@ def render_add_episode_page(db, youtube_handler, transcript_processor):
                 col3.metric("Failed", results["failed"])
 
 
+def render_browse_episodes_page(db, transcript_processor):
+    """Render the Browse Episodes page for viewing all stored episodes."""
+    st.header("Browse Episodes")
+    
+    episodes = db.get_all_episodes()
+    
+    if not episodes:
+        st.info("No episodes found. Add some episodes first!")
+        return
+    
+    # Display episodes in a table
+    df = pd.DataFrame(episodes)
+    df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
+    
+    # Sort by date (newest first)
+    df = df.sort_values('date', ascending=False)
+    
+    st.subheader(f"Total Episodes: {len(df)}")
+    
+    # Display episodes
+    for idx, row in df.iterrows():
+        episode = row.to_dict()
+        with st.expander(f"{episode['title']} - {episode['date']}"):
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                st.write(f"**Date:** {episode['date']}")
+                st.write(f"**Video ID:** {episode['video_id']}")
+                
+            with col2:
+                st.link_button("Watch on YouTube", episode['url'])
+            
+            # Show transcript tabs
+            tab1, tab2, tab3 = st.tabs(["Summary & Topics", "Enhanced Transcript", "Raw Transcript"])
+            
+            with tab1:
+                # Display summary if available
+                if episode.get('summary'):
+                    st.subheader("Episode Summary")
+                    st.markdown(f"<div style='background-color: #f0f2f6; padding: 15px; border-radius: 5px; border-left: 4px solid #4CAF50; color: black;'>{episode['summary']}</div>", unsafe_allow_html=True)
+                
+                # Display topics if available
+                if episode.get('topics'):
+                    try:
+                        import json
+                        topics = json.loads(episode['topics'])
+                        
+                        st.subheader("Main Topics")
+                        topic_cols = st.columns(min(3, len(topics)))
+                        
+                        for i, topic in enumerate(topics):
+                            col_index = i % len(topic_cols)
+                            with topic_cols[col_index]:
+                                st.markdown(f"<div style='background-color: #e1f5fe; margin: 5px 0; padding: 10px; border-radius: 5px; text-align: center; color: black;'><b>{topic}</b></div>", unsafe_allow_html=True)
+                    except:
+                        st.write("Topics data not available in proper format.")
+                
+                # Display key points if available
+                if episode.get('key_points'):
+                    try:
+                        import json
+                        key_points = json.loads(episode['key_points'])
+                        
+                        st.subheader("Key Points")
+                        for i, point in enumerate(key_points, 1):
+                            st.markdown(f"<div style='background-color: #fff8e1; margin: 5px 0; padding: 10px; border-radius: 5px; color: black;'><b>{i}.</b> {point}</div>", unsafe_allow_html=True)
+                    except:
+                        st.write("Key points data not available in proper format.")
+                
+                # If no summary or topics available
+                if not episode.get('summary') and not episode.get('topics') and not episode.get('key_points'):
+                    st.info("No summary or topic data available for this episode.")
+                    
+                    # Offer to generate them
+                    if st.button("Generate Summary and Topics", key=f"gen_summary_{episode['id']}"):
+                        with st.spinner("Analyzing transcript and generating summary..."):
+                            try:
+                                # Process only a chunk of the transcript to avoid token limits
+                                transcript_chunk = episode['enhanced_transcript'][:4000]  # First 4000 characters
+                                
+                                # Generate topics and summary
+                                topics_data = transcript_processor.extract_key_topics(transcript_chunk)
+                                detailed_summary = transcript_processor.generate_summary(transcript_chunk)
+                                
+                                # Convert topics and key_points to strings for storage
+                                import json
+                                topics_str = None
+                                key_points_str = None
+                                summary = None
+                                
+                                if isinstance(topics_data, dict):
+                                    if 'topics' in topics_data and topics_data['topics']:
+                                        topics_str = json.dumps(topics_data['topics'])
+                                    if 'key_points' in topics_data and topics_data['key_points']:
+                                        key_points_str = json.dumps(topics_data['key_points'])
+                                    if 'summary' in topics_data and topics_data['summary'] and "failed" not in topics_data['summary'].lower():
+                                        summary = topics_data['summary']
+                                
+                                # If topic extraction didn't provide a summary, use the detailed one
+                                if not summary or "failed" in summary.lower():
+                                    summary = detailed_summary
+                                
+                                # Check if we have valid data
+                                if (not topics_str and not key_points_str) or not summary or "failed" in summary.lower():
+                                    st.error("Failed to generate meaningful topics or summary. Please try again or adjust the transcript.")
+                                    return
+                                
+                                # Update the episode in the database
+                                updated_data = {
+                                    'video_id': episode['video_id'],
+                                    'title': episode['title'],
+                                    'date': episode['date'],
+                                    'url': episode['url'],
+                                    'raw_transcript': episode['raw_transcript'],
+                                    'enhanced_transcript': episode['enhanced_transcript'],
+                                    'extraction_method': episode.get('extraction_method', 'caption'),
+                                    'topics': topics_str,
+                                    'key_points': key_points_str,
+                                    'summary': summary
+                                }
+                                
+                                db.save_episode(updated_data)
+                                st.success("Summary and topics generated successfully!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error generating summary and topics: {str(e)}")
+                                st.info("Tip: Try again or check your OpenAI API key configuration.")
+            
+            with tab2:
+                st.text_area(
+                    "Enhanced Transcript:", 
+                    episode['enhanced_transcript'], 
+                    height=300, 
+                    key=f"enhanced_{episode['id']}"
+                )
+            
+            with tab3:
+                st.text_area(
+                    "Raw Transcript:", 
+                    episode['raw_transcript'], 
+                    height=300, 
+                    key=f"raw_{episode['id']}"
+                )
+
+
 def main():
     st.title("CWSA Transcript Extractor & Search")
     st.markdown("Created by Gadsdencode")
