@@ -640,6 +640,154 @@ def render_browse_episodes_page(db, transcript_processor):
                 )
 
 
+def render_search_transcripts_page(db):
+    """Render the Search Transcripts page for searching across all episodes."""
+    st.header("Search Transcripts")
+    
+    search_query = st.text_input("Enter search term:", placeholder="Enter words or phrases to search...")
+    
+    if search_query:
+        search_results = db.search_transcripts(search_query)
+        
+        if search_results:
+            st.subheader(f"Found {len(search_results)} result(s)")
+            
+            for result in search_results:
+                with st.expander(f"{result['title']} - {result['date']}"):
+                    col1, col2 = st.columns([3, 1])
+                    
+                    with col1:
+                        st.write(f"**Date:** {result['date']}")
+                        st.write(f"**Video ID:** {result['video_id']}")
+                        
+                    with col2:
+                        st.link_button("Watch on YouTube", result['url'])
+                    
+                    # Count occurrences
+                    search_terms = [term.strip() for term in search_query.lower().split() if term.strip()]
+                    total_matches = 0
+                    for term in search_terms:
+                        matches = len(re.findall(re.escape(term), result['enhanced_transcript'], re.IGNORECASE))
+                        total_matches += matches
+                    
+                    st.markdown(f"**Found {total_matches} match(es) in transcript:**")
+                    
+                    # Show topics and summary if available
+                    if result.get('summary') or result.get('topics'):
+                        st.markdown("### Summary & Topics")
+                        st.markdown("<hr style='margin: 0.5em 0; border-color: #f0f0f0;'>", unsafe_allow_html=True)
+                        
+                        # Show summary if available
+                        if result.get('summary'):
+                            st.subheader("Episode Summary")
+                            st.markdown(f"<div style='background-color: #f0f2f6; padding: 15px; border-radius: 5px; border-left: 4px solid #4CAF50; color: black;'>{result['summary']}</div>", unsafe_allow_html=True)
+                        
+                        # Show topics if available
+                        col1, col2 = st.columns([1, 1])
+                        
+                        with col1:
+                            if result.get('topics'):
+                                try:
+                                    import json
+                                    topics = json.loads(result['topics'])
+                                    
+                                    st.subheader("Main Topics")
+                                    for topic in topics:
+                                        st.markdown(f"<div style='background-color: #e1f5fe; margin: 5px 0; padding: 10px; border-radius: 5px; color: black;'><b>•</b> {topic}</div>", unsafe_allow_html=True)
+                                except:
+                                    pass
+                        
+                        with col2:
+                            if result.get('key_points'):
+                                try:
+                                    import json
+                                    key_points = json.loads(result['key_points'])
+                                    
+                                    st.subheader("Key Points")
+                                    for i, point in enumerate(key_points, 1):
+                                        st.markdown(f"<div style='background-color: #fff8e1; margin: 5px 0; padding: 10px; border-radius: 5px; color: black;'><b>{i}.</b> {point}</div>", unsafe_allow_html=True)
+                                except:
+                                    pass
+                    
+                    # Add a separator before the transcript sections
+                    st.markdown("<hr style='margin: 1em 0; border-color: #f0f0f0;'>", unsafe_allow_html=True)
+                    
+                    # Create tabs for context and full transcript
+                    st.markdown("### Transcript Details")
+                    tab1, tab2 = st.tabs(["Context Snippets", "Full Transcript"])
+                    
+                    with tab1:
+                        # Get the full transcript
+                        full_transcript = result['enhanced_transcript']
+                        
+                        # Show context snippets for better readability
+                        st.markdown("**Key passages containing search terms:**")
+                        context_snippets = extract_context_snippets(
+                            result['enhanced_transcript'], 
+                            search_query, 
+                            context_length=150
+                        )
+                        
+                        for i, snippet in enumerate(context_snippets, 1):
+                            st.markdown(
+                                f"""
+                                <div style="
+                                    background-color: #fff3cd;
+                                    padding: 10px;
+                                    margin: 5px 0;
+                                    border-radius: 3px;
+                                    border-left: 3px solid #ffc107;
+                                    color: black;
+                                ">
+                                    <small><strong>Snippet {i}:</strong></small><br>
+                                    {snippet}
+                                </div>
+                                """,
+                                unsafe_allow_html=True
+                            )
+                    
+                    with tab2:
+                        # Apply highlighting using HTML spans
+                        highlighted_transcript = full_transcript
+                        
+                        # Create different colors for different search terms
+                        colors = ['#ffeb3b', '#ff9800', '#4caf50', '#2196f3', '#9c27b0', '#f44336']
+                        
+                        for i, term in enumerate(search_terms):
+                            if term:
+                                color = colors[i % len(colors)]
+                                # Replace all instances with highlighted version
+                                pattern = re.compile(f'({re.escape(term)})', re.IGNORECASE)
+                                highlighted_transcript = pattern.sub(
+                                    f'<span style="background-color: {color}; font-weight: bold; padding: 2px; color: black;">\\1</span>',
+                                    highlighted_transcript
+                                )
+                        
+                        # Display the FULL transcript with highlighting in a scrollable container
+                        st.markdown(
+                            f"""
+                            <div style="
+                                background-color: #f8f9fa;
+                                padding: 15px;
+                                border-radius: 5px;
+                                border-left: 4px solid #007acc;
+                                max-height: 500px;
+                                overflow-y: auto;
+                                font-family: Arial, sans-serif;
+                                line-height: 1.5;
+                                white-space: pre-wrap;
+                                word-wrap: break-word;
+                                color: black;
+                            ">
+                                {highlighted_transcript}
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+        else:
+            st.info("No results found for your search query.")
+
+
 def main():
     st.title("CWSA Transcript Extractor & Search")
     st.markdown("Created by Gadsdencode")
