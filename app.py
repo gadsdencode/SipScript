@@ -233,6 +233,268 @@ def process_youtube_episode(youtube_url, extraction_method, quality_level,
     
     return result
 
+def render_add_episode_page(db, youtube_handler, transcript_processor):
+    """Render the Add Episode page for adding single or batch episodes."""
+    st.header("Add New Episode(s)")
+    
+    # Create tabs for single vs batch processing
+    single_tab, batch_tab = st.tabs(["Single Episode", "Batch Episodes"])
+    
+    with single_tab:
+        # URL Input
+        youtube_url = st.text_input(
+            "Enter YouTube URL for Coffee with Scott Adams episode:",
+            placeholder="https://www.youtube.com/watch?v=...",
+            key="single_url_input"
+        )
+        
+        # Extraction method selection
+        st.subheader("Choose Transcript Extraction Method")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.markdown("**📝 Caption-Based**")
+            st.markdown("• Fast API extraction")
+            st.markdown("• May be blocked")
+            
+        with col2:
+            st.markdown("**🌐 Web Scraping**")
+            st.markdown("• Bypasses all blocks")
+            st.markdown("• Always works")
+            st.markdown("• Most reliable")
+            
+        with col3:
+            st.markdown("**🎤 Audio-Based**")
+            st.markdown("• Speech recognition")
+            st.markdown("• No captions needed")
+            st.markdown("• Takes 2-5 minutes")
+        
+        extraction_method = st.radio(
+            "Select extraction method:",
+            ["Caption-Based (Fast)", "Web Scraping (Bypasses Blocks)", "Audio-Based (No Captions Needed)"],
+            horizontal=True,
+            key="single_extraction_method"
+        )
+        
+        # Show quality options for audio-based extraction
+        quality_level = "Fast"  # Default value
+        if "Audio-Based" in extraction_method:
+            st.info("💡 **Tip:** Audio extraction takes longer but works when captions aren't available. Processing time: 2-5 minutes for typical episodes.")
+            
+            quality_level = st.selectbox(
+                "Choose processing speed:",
+                ["Fast (tiny model)", "Balanced (base model)", "Best Quality (small model)"],
+                index=0,
+                help="Fast: ~2 min, Balanced: ~4 min, Best: ~6 min for typical episodes",
+                key="single_quality_level"
+            )
+        
+        if st.button("Extract and Process Transcript", disabled=not youtube_url, key="single_process_button"):
+            progress_placeholder = st.empty()
+            result = process_youtube_episode(
+                youtube_url, 
+                extraction_method, 
+                quality_level,
+                db, 
+                youtube_handler, 
+                transcript_processor,
+                progress_placeholder
+            )
+            
+            progress_placeholder.empty()
+            
+            if result["success"]:
+                st.success("Episode processed and saved successfully!")
+                st.info(f"Episode Title: {result['title']}")
+            else:
+                st.error(f"Error: {result['error']}")
+    
+    with batch_tab:
+        st.subheader("Batch Episode Processing")
+        st.markdown("""
+        Add multiple episodes at once by providing a list of YouTube URLs. 
+        Each URL will be processed sequentially.
+        """)
+        
+        # Offer two input methods: manual input and file upload
+        input_method = st.radio(
+            "Choose input method:",
+            ["Enter URLs manually", "Upload a file (CSV or TXT)"],
+            key="batch_input_method"
+        )
+        
+        urls_to_process = []
+        
+        if input_method == "Enter URLs manually":
+            urls_text = st.text_area(
+                "Enter YouTube URLs (one per line):",
+                placeholder="https://www.youtube.com/watch?v=...\nhttps://youtu.be/...",
+                height=150,
+                key="batch_urls_text"
+            )
+            
+            if urls_text:
+                # Split by newline and filter out empty lines
+                urls_to_process = [url.strip() for url in urls_text.split('\n') if url.strip()]
+                st.info(f"Found {len(urls_to_process)} URL(s) to process")
+        else:
+            uploaded_file = st.file_uploader("Upload a file with YouTube URLs", type=["txt", "csv"])
+            
+            if uploaded_file is not None:
+                try:
+                    # Determine file type and parse accordingly
+                    if uploaded_file.name.endswith('.csv'):
+                        df = pd.read_csv(uploaded_file)
+                        # Look for a column that might contain URLs
+                        url_column = None
+                        for col in df.columns:
+                            if ('url' in col.lower()) or ('link' in col.lower()):
+                                url_column = col
+                                break
+                        
+                        if url_column:
+                            urls_to_process = df[url_column].dropna().tolist()
+                        else:
+                            # Assume the first column contains URLs
+                            urls_to_process = df.iloc[:, 0].dropna().tolist()
+                    else:
+                        # Assume TXT file with one URL per line
+                        content = uploaded_file.getvalue().decode("utf-8")
+                        urls_to_process = [url.strip() for url in content.split('\n') if url.strip()]
+                    
+                    st.info(f"Found {len(urls_to_process)} URL(s) to process from the uploaded file")
+                except Exception as e:
+                    st.error(f"Error parsing file: {str(e)}")
+        
+        # Extraction method selection (same as single mode but with different keys)
+        st.subheader("Choose Transcript Extraction Method")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.markdown("**📝 Caption-Based**")
+            st.markdown("• Fast API extraction")
+            st.markdown("• May be blocked")
+            
+        with col2:
+            st.markdown("**🌐 Web Scraping**")
+            st.markdown("• Bypasses all blocks")
+            st.markdown("• Always works")
+            st.markdown("• Most reliable")
+            
+        with col3:
+            st.markdown("**🎤 Audio-Based**")
+            st.markdown("• Speech recognition")
+            st.markdown("• No captions needed")
+            st.markdown("• Takes 2-5 minutes")
+        
+        batch_extraction_method = st.radio(
+            "Select extraction method for all URLs:",
+            ["Caption-Based (Fast)", "Web Scraping (Bypasses Blocks)", "Audio-Based (No Captions Needed)"],
+            horizontal=True,
+            key="batch_extraction_method"
+        )
+        
+        # Show quality options for audio-based extraction
+        batch_quality_level = "Fast"  # Default value
+        if "Audio-Based" in batch_extraction_method:
+            st.info("💡 **Tip:** Audio extraction takes longer but works when captions aren't available. For batch processing, the Fast option is recommended.")
+            
+            batch_quality_level = st.selectbox(
+                "Choose processing speed:",
+                ["Fast (tiny model)", "Balanced (base model)", "Best Quality (small model)"],
+                index=0,
+                help="Fast: ~2 min, Balanced: ~4 min, Best: ~6 min per episode",
+                key="batch_quality_level"
+            )
+        
+        # Skip duplicate option
+        skip_existing = st.checkbox(
+            "Skip episodes that already exist in the database", 
+            value=True,
+            key="skip_existing"
+        )
+        
+        # Process button
+        if st.button("Process All URLs", disabled=len(urls_to_process) == 0, key="batch_process_button"):
+            if len(urls_to_process) > 0:
+                st.subheader("Processing Results")
+                
+                # Create placeholders for results
+                progress_bar = st.progress(0)
+                status_placeholder = st.empty()
+                results_placeholder = st.empty()
+                
+                # Initialize results tracking
+                total_urls = len(urls_to_process)
+                results = {
+                    "success": 0,
+                    "skipped": 0,
+                    "failed": 0,
+                    "details": []
+                }
+                
+                # Process each URL
+                for i, url in enumerate(urls_to_process):
+                    # Update progress
+                    progress_percent = (i / total_urls)
+                    progress_bar.progress(progress_percent)
+                    status_placeholder.info(f"Processing URL {i+1} of {total_urls}: {url}")
+                    
+                    # Process the URL
+                    result = process_youtube_episode(
+                        url,
+                        batch_extraction_method,
+                        batch_quality_level,
+                        db,
+                        youtube_handler,
+                        transcript_processor,
+                        status_placeholder
+                    )
+                    
+                    # Track result
+                    if result["success"]:
+                        results["success"] += 1
+                        results["details"].append({
+                            "url": url,
+                            "status": "✅ Success",
+                            "title": result["title"],
+                            "message": "Processed successfully"
+                        })
+                    elif "already exists" in result.get("message", "").lower() and skip_existing:
+                        results["skipped"] += 1
+                        results["details"].append({
+                            "url": url,
+                            "status": "⏭️ Skipped",
+                            "title": result.get("title", "Unknown"),
+                            "message": "Already exists in database"
+                        })
+                    else:
+                        results["failed"] += 1
+                        results["details"].append({
+                            "url": url,
+                            "status": "❌ Failed",
+                            "title": "N/A",
+                            "message": result.get("error", "Unknown error")
+                        })
+                    
+                    # Update results display
+                    results_df = pd.DataFrame(results["details"])
+                    results_placeholder.dataframe(results_df)
+                
+                # Complete progress bar
+                progress_bar.progress(1.0)
+                status_placeholder.success("Batch processing completed!")
+                
+                # Display final summary
+                st.subheader("Summary")
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Successfully Processed", results["success"])
+                col2.metric("Skipped (Already Exist)", results["skipped"])
+                col3.metric("Failed", results["failed"])
+
+
 def main():
     st.title("CWSA Transcript Extractor & Search")
     st.markdown("Created by Gadsdencode")
