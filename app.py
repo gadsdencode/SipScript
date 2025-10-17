@@ -788,6 +788,406 @@ def render_search_transcripts_page(db):
             st.info("No results found for your search query.")
 
 
+def render_database_management_page(db, transcript_processor):
+    """Render the Database Management page for admin operations."""
+    st.header("Database Management")
+    
+    # Check if admin is authenticated
+    if not st.session_state.get("is_admin", False):
+        st.warning("This page requires admin authentication")
+        
+        # Create login form
+        with st.form("admin_login_form"):
+            st.subheader("Admin Login")
+            admin_email = st.text_input("Email", key="admin_email_input")
+            admin_password = st.text_input("Password", type="password", key="admin_password_input")
+            submit_button = st.form_submit_button("Login")
+            
+            if submit_button:
+                if db.authenticate_admin(admin_email, admin_password):
+                    st.session_state["is_admin"] = True
+                    st.session_state["admin_email"] = admin_email
+                    st.success("Login successful!")
+                    st.rerun()
+                else:
+                    st.error("Invalid email or password")
+        
+        # Stop rendering the rest of the page if not authenticated
+        return
+    
+    # Show logout button if authenticated
+    if st.sidebar.button("Admin Logout"):
+        if "is_admin" in st.session_state:
+            del st.session_state["is_admin"]
+        if "admin_email" in st.session_state:
+            del st.session_state["admin_email"]
+        st.sidebar.success("Logged out successfully")
+        st.rerun()
+    
+    st.sidebar.success(f"Logged in as {st.session_state.get('admin_email', 'admin')}")
+    
+    # Database Statistics
+    total_episodes = db.get_episode_count()
+    all_episodes = db.get_all_episodes()
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("Total Episodes", total_episodes)
+    
+    with col2:
+        if all_episodes:
+            total_words = sum(len(episode['enhanced_transcript'].split()) for episode in all_episodes)
+            st.metric("Total Words", f"{total_words:,}")
+        else:
+            st.metric("Total Words", "0")
+    
+    with col3:
+        if all_episodes:
+            latest_date = max(episode['date'] for episode in all_episodes)
+            st.metric("Latest Episode", latest_date)
+        else:
+            st.metric("Latest Episode", "None")
+    
+    # Additional statistics about topics and summaries
+    if all_episodes:
+        col1, col2 = st.columns(2)
+        with col1:
+            episodes_with_summaries = sum(1 for ep in all_episodes if ep.get('summary'))
+            summary_percentage = round((episodes_with_summaries / len(all_episodes)) * 100, 1) if all_episodes else 0
+            st.metric("Episodes with Summaries", f"{episodes_with_summaries}/{len(all_episodes)} ({summary_percentage}%)")
+        
+        with col2:
+            episodes_with_topics = sum(1 for ep in all_episodes if ep.get('topics'))
+            topics_percentage = round((episodes_with_topics / len(all_episodes)) * 100, 1) if all_episodes else 0
+            st.metric("Episodes with Topics", f"{episodes_with_topics}/{len(all_episodes)} ({topics_percentage}%)")
+    
+    st.markdown("---")
+    
+    # Database Operations
+    tab1, tab2, tab3 = st.tabs(["Episode Management", "Data Enrichment", "Database Info"])
+    
+    with tab1:
+        st.subheader("Episode Management")
+        
+        if all_episodes:
+            # Show episodes in a table format
+            df = pd.DataFrame(all_episodes)
+            df_display = df[['id', 'title', 'date', 'video_id']].copy()
+            df_display.columns = ['ID', 'Title', 'Date', 'Video ID']
+            
+            st.dataframe(df_display, use_container_width=True)
+            
+            # Delete episode functionality
+            st.markdown("**Delete Episode:**")
+            episode_to_delete = st.selectbox(
+                "Select episode to delete:",
+                options=[f"{ep['id']} - {ep['title'][:50]}..." for ep in all_episodes],
+                key="delete_episode"
+            )
+            
+            if st.button("Delete Selected Episode", type="secondary"):
+                if episode_to_delete:
+                    episode_id = int(episode_to_delete.split(" - ")[0])
+                    if db.delete_episode(episode_id):
+                        st.success("Episode deleted successfully!")
+                        st.rerun()
+                    else:
+                        st.error("Failed to delete episode.")
+        else:
+            st.info("No episodes in database yet.")
+    
+    with tab2:
+        st.subheader("Generate Summaries and Topics")
+        
+        # Check if we have episodes that need enrichment
+        if all_episodes:
+            # Count episodes without summaries or topics
+            episodes_missing_data = [ep for ep in all_episodes if not ep.get('summary') or not ep.get('topics')]
+            
+            if episodes_missing_data:
+                st.info(f"Found {len(episodes_missing_data)} episode(s) that need summaries or topics.")
+                
+                # Options for batch processing
+                process_options = st.radio(
+                    "Choose processing option:",
+                    ["Process all episodes missing data", "Select specific episodes to process"],
+                    key="process_option"
+                )
+                
+                episodes_to_process = []
+                
+                if process_options == "Process all episodes missing data":
+                    episodes_to_process = episodes_missing_data
+                else:
+                    # Allow selecting specific episodes
+                    episode_options = [f"{ep['id']} - {ep['title'][:50]}..." for ep in episodes_missing_data]
+                    selected_episodes = st.multiselect(
+                        "Select episodes to process:",
+                        options=episode_options,
+                        key="selected_episodes"
+                    )
+                    
+                    # Extract episode IDs from selection
+                    selected_ids = [int(ep.split(" - ")[0]) for ep in selected_episodes]
+                    episodes_to_process = [ep for ep in episodes_missing_data if ep['id'] in selected_ids]
+                
+                # Add advanced options
+                with st.expander("Advanced Options"):
+                    chunk_size = st.slider(
+                        "Transcript chunk size (characters):",
+                        min_value=1000,
+                        max_value=8000,
+                        value=4000,
+                        step=500,
+                        help="Larger chunks include more context but may exceed token limits"
+                    )
+                    
+                    max_retries = st.number_input(
+                        "Max retries per episode:",
+                        min_value=0,
+                        max_value=5,
+                        value=2,
+                        help="Number of times to retry processing an episode if it fails"
+                    )
+                
+                if st.button("Generate Summaries and Topics", disabled=len(episodes_to_process) == 0):
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    error_log = []
+                    
+                    # Process each episode
+                    for i, episode in enumerate(episodes_to_process):
+                        progress_percent = i / len(episodes_to_process)
+                        progress_bar.progress(progress_percent)
+                        status_text.info(f"Processing {i+1}/{len(episodes_to_process)}: {episode['title'][:50]}...")
+                        
+                        success = False
+                        retries = 0
+                        
+                        # Try to process with retries
+                        while not success and retries <= max_retries:
+                            try:
+                                if retries > 0:
+                                    status_text.warning(f"Retry {retries}/{max_retries} for episode: {episode['title'][:50]}...")
+                                
+                                # Process transcript in chunks if it's very long
+                                transcript = episode['enhanced_transcript']
+                                transcript_chunk = transcript[:chunk_size]  # Use only the first chunk for topic extraction
+                                
+                                # Generate topics and summary
+                                topics_data = transcript_processor.extract_key_topics(transcript_chunk)
+                                
+                                # If no error occurred with topics, try to get a detailed summary
+                                detailed_summary = transcript_processor.generate_summary(transcript_chunk)
+                                
+                                # Convert topics and key_points to strings for storage
+                                import json
+                                topics_str = None
+                                key_points_str = None
+                                summary = None
+                                
+                                if isinstance(topics_data, dict):
+                                    if 'topics' in topics_data and topics_data['topics']:
+                                        topics_str = json.dumps(topics_data['topics'])
+                                    if 'key_points' in topics_data and topics_data['key_points']:
+                                        key_points_str = json.dumps(topics_data['key_points'])
+                                    if 'summary' in topics_data and topics_data['summary']:
+                                        summary = topics_data['summary']
+                                
+                                # If topic extraction didn't provide a summary, use the detailed one
+                                if not summary or "failed" in summary.lower():
+                                    summary = detailed_summary
+                                
+                                # Check if we have valid data
+                                if (topics_str or key_points_str) and summary and "failed" not in summary.lower():
+                                    # Update the episode in the database
+                                    updated_data = {
+                                        'video_id': episode['video_id'],
+                                        'title': episode['title'],
+                                        'date': episode['date'],
+                                        'url': episode['url'],
+                                        'raw_transcript': episode['raw_transcript'],
+                                        'enhanced_transcript': episode['enhanced_transcript'],
+                                        'extraction_method': episode.get('extraction_method', 'caption'),
+                                        'topics': topics_str,
+                                        'key_points': key_points_str,
+                                        'summary': summary
+                                    }
+                                    
+                                    db.save_episode(updated_data)
+                                    success = True
+                                else:
+                                    raise ValueError("No valid topics or summary generated")
+                                
+                            except Exception as e:
+                                retries += 1
+                                error_message = f"Error processing episode {episode['id']}: {str(e)}"
+                                if retries > max_retries:
+                                    error_log.append({
+                                        "episode_id": episode['id'],
+                                        "title": episode['title'],
+                                        "error": str(e)
+                                    })
+                        
+                        # Show success or failure for this episode
+                        if success:
+                            status_text.success(f"Successfully processed episode {i+1}/{len(episodes_to_process)}")
+                        else:
+                            status_text.error(f"Failed to process episode {i+1}/{len(episodes_to_process)} after {max_retries} retries")
+                    
+                    progress_bar.progress(1.0)
+                    
+                    # Show final results
+                    st.subheader("Processing Results")
+                    successful_count = len(episodes_to_process) - len(error_log)
+                    st.success(f"Successfully processed {successful_count} out of {len(episodes_to_process)} episodes.")
+                    
+                    if error_log:
+                        st.error(f"Failed to process {len(error_log)} episodes.")
+                        with st.expander("Show Error Details"):
+                            for error in error_log:
+                                st.markdown(f"**Episode {error['episode_id']}:** {error['title']}")
+                                st.markdown(f"*Error:* {error['error']}")
+                                st.markdown("---")
+                    
+                    # Offer to reload the page
+                    if successful_count > 0:
+                        if st.button("Reload Page to See Results"):
+                            st.rerun()
+            else:
+                st.success("All episodes have summaries and topics already!")
+        else:
+            st.info("No episodes in database yet.")
+    
+    with tab3:
+        st.subheader("Database Info")
+        
+        # Create tabs for database info and admin management
+        db_info_tab, admin_tab = st.tabs(["Database Info", "Admin Management"])
+        
+        with db_info_tab:
+            # Show database file info
+            db_path = db.db_path
+            if os.path.exists(db_path):
+                file_size = os.path.getsize(db_path)
+                st.write(f"**Database file:** {db_path}")
+                st.write(f"**File size:** {file_size / 1024:.2f} KB")
+                st.write(f"**Total episodes:** {total_episodes}")
+            
+            # Export functionality
+            st.markdown("**Export Data:**")
+            
+            if all_episodes:
+                export_format = st.selectbox(
+                    "Select export format:",
+                    ["CSV", "JSON"],
+                    key="export_format"
+                )
+                
+                if st.button("Export All Episodes", key="export_button"):
+                    df = pd.DataFrame(all_episodes)
+                    
+                    if export_format == "CSV":
+                        # Prepare CSV file for download
+                        csv_data = df[['id', 'title', 'date', 'url', 'video_id']].to_csv(index=False)
+                        
+                        st.download_button(
+                            label="Download CSV",
+                            data=csv_data,
+                            file_name="cwsa_episodes.csv",
+                            mime="text/csv"
+                        )
+                    else:
+                        # Prepare JSON file for download
+                        json_data = df[['id', 'title', 'date', 'url', 'video_id']].to_json(orient="records")
+                        
+                        st.download_button(
+                            label="Download JSON",
+                            data=json_data,
+                            file_name="cwsa_episodes.json",
+                            mime="application/json"
+                        )
+            else:
+                st.info("No episodes to export.")
+        
+        with admin_tab:
+            st.subheader("Admin User Management")
+            
+            # Get admin users
+            admin_users = db.get_admin_users()
+            
+            if admin_users:
+                st.write("**Current Admin Users:**")
+                
+                for user in admin_users:
+                    st.markdown(f"🔑 **{user['email']}** (ID: {user['id']})")
+            
+            # Add form to create new admin user
+            st.write("**Add New Admin User:**")
+            
+            with st.form("add_admin_form"):
+                new_admin_email = st.text_input("Email", key="new_admin_email")
+                new_admin_password = st.text_input("Password", type="password", key="new_admin_password")
+                confirm_password = st.text_input("Confirm Password", type="password", key="confirm_admin_password")
+                
+                submit_button = st.form_submit_button("Add Admin User")
+                
+                if submit_button:
+                    if not new_admin_email or not new_admin_password:
+                        st.error("Email and password are required")
+                    elif new_admin_password != confirm_password:
+                        st.error("Passwords do not match")
+                    else:
+                        # Add admin user to database
+                        try:
+                            db._create_admin_user(new_admin_email, new_admin_password)
+                            st.success(f"Admin user {new_admin_email} added successfully")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error adding admin user: {str(e)}")
+            
+            # Change own password
+            st.write("**Change Your Password:**")
+            
+            with st.form("change_password_form"):
+                current_password = st.text_input("Current Password", type="password", key="current_password")
+                new_password = st.text_input("New Password", type="password", key="new_password")
+                confirm_new_password = st.text_input("Confirm New Password", type="password", key="confirm_new_password")
+                
+                submit_button = st.form_submit_button("Change Password")
+                
+                if submit_button:
+                    admin_email = st.session_state.get("admin_email")
+                    
+                    if not admin_email:
+                        st.error("Admin email not found in session")
+                    elif not current_password or not new_password:
+                        st.error("All fields are required")
+                    elif new_password != confirm_new_password:
+                        st.error("New passwords do not match")
+                    else:
+                        # Verify current password
+                        if db.authenticate_admin(admin_email, current_password):
+                            try:
+                                # Update admin password
+                                with sqlite3.connect(db.db_path) as conn:
+                                    cursor = conn.cursor()
+                                    new_password_hash = db._hash_password(new_password)
+                                    cursor.execute("""
+                                        UPDATE admin_users 
+                                        SET password_hash = ?
+                                        WHERE email = ?
+                                    """, (new_password_hash, admin_email))
+                                    conn.commit()
+                                
+                                st.success("Password changed successfully")
+                            except Exception as e:
+                                st.error(f"Error changing password: {str(e)}")
+                        else:
+                            st.error("Current password is incorrect")
+
+
 def main():
     st.title("CWSA Transcript Extractor & Search")
     st.markdown("Created by Gadsdencode")
